@@ -10,7 +10,7 @@
  * Backends:
  *   macOS  — lo0 alias + local TCP relay
  *   Linux  — iptables + ip addr
- *   Windows — netsh interface portproxy + netsh interface ip
+ *   Windows — loopback alias + local TCP relay
  *
  * Usage:
  *   node setup-forwarding.js on       Enable forwarding (requires root/admin)
@@ -753,18 +753,59 @@ function netshEnable() {
     console.log(`${YELLOW}⊘${NC} Loopback alias already exists: ${LOOPBACK_IP}`)
   }
 
-  // 2. Add port proxy rule
+  // 2. Remove legacy portproxy rule from previous versions
   run(
-    `netsh interface portproxy add v4tov4 listenaddress=${LOOPBACK_IP} listenport=${FROM_PORT} connectaddress=127.0.0.1 connectport=${TO_PORT}`
-  )
-  console.log(
-    `${GREEN}✓${NC} Port proxy rule added: ${LOOPBACK_IP}:${FROM_PORT} → 127.0.0.1:${TO_PORT}`
+    `netsh interface portproxy delete v4tov4 listenaddress=${LOOPBACK_IP} listenport=${FROM_PORT}`,
+    true
   )
 
-  // 3. Update hosts file
+  // 3. Start TCP relay
+  const existingPid = getRelayPid()
+  if (existingPid) {
+    try {
+      process.kill(existingPid)
+    } catch {}
+  }
+
+  const child = spawn(
+    process.execPath,
+    [
+      RELAY_SCRIPT,
+      LOOPBACK_IP,
+      String(FROM_PORT),
+      "127.0.0.1",
+      String(TO_PORT),
+      PID_FILE,
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+    }
+  )
+  child.unref()
+
+  const startTime = Date.now()
+  while (Date.now() - startTime < 1000) {
+    if (getRelayPid()) break
+    spawnSync(process.execPath, ["-e", "setTimeout(()=>{},100)"], {
+      stdio: "ignore",
+    })
+  }
+
+  if (getRelayPid()) {
+    console.log(
+      `${GREEN}✓${NC} TCP relay started: ${LOOPBACK_IP}:${FROM_PORT} → 127.0.0.1:${TO_PORT}`
+    )
+  } else {
+    console.log(
+      `${RED}✗${NC} TCP relay failed to start (check port ${FROM_PORT} availability)`
+    )
+  }
+
+  // 4. Update hosts file
   addHostsEntries()
 
-  // 4. Add proxy bypass entries
+  // 5. Add proxy bypass entries
   addProxyBypass()
 
   console.log("")
@@ -774,21 +815,38 @@ function netshEnable() {
 function netshDisable() {
   checkElevated()
 
-  // 1. Remove port proxy rule
+  // 1. Stop TCP relay
+  const pid = getRelayPid()
+  if (pid) {
+    try {
+      process.kill(pid, "SIGTERM")
+    } catch {
+      // ignore
+    }
+    try {
+      fs.unlinkSync(PID_FILE)
+    } catch {
+      // ignore
+    }
+    console.log(`${GREEN}✓${NC} Stopped TCP relay (pid ${pid})`)
+  } else {
+    console.log(`${YELLOW}⊘${NC} TCP relay not running`)
+  }
+
+  // 2. Remove legacy portproxy rule
   run(
     `netsh interface portproxy delete v4tov4 listenaddress=${LOOPBACK_IP} listenport=${FROM_PORT}`,
     true
   )
-  console.log(`${GREEN}✓${NC} Removed port proxy rule`)
 
-  // 2. Remove loopback address
+  // 3. Remove loopback address
   run(`netsh interface ip delete address "Loopback" ${LOOPBACK_IP}`, true)
   console.log(`${GREEN}✓${NC} Removed loopback alias: ${LOOPBACK_IP}`)
 
-  // 3. Clean hosts file
+  // 4. Clean hosts file
   removeHostsEntries()
 
-  // 4. Remove proxy bypass entries
+  // 5. Remove proxy bypass entries
   removeProxyBypass()
 
   console.log("")
@@ -799,13 +857,29 @@ function netshStatus() {
   console.log(`${CYAN}═══ Cursor API5 Forwarding Status ═══${NC}`)
   console.log("")
 
-  // port proxy rules
-  process.stdout.write("  Port proxy rule: ")
-  const proxyRules = run("netsh interface portproxy show v4tov4", true)
-  if (proxyRules.includes(LOOPBACK_IP)) {
+  process.stdout.write(`  Loopback alias (${LOOPBACK_IP}): `)
+  const ifaceInfo = run("netsh interface ip show address loopback", true)
+  if (ifaceInfo.includes(LOOPBACK_IP)) {
     console.log(`${GREEN}✓ configured${NC}`)
   } else {
     console.log(`${RED}✗ not configured${NC}`)
+  }
+
+  process.stdout.write("  TCP relay: ")
+  const pid = getRelayPid()
+  if (pid) {
+    console.log(`${GREEN}✓ running (pid ${pid})${NC}`)
+  } else {
+    console.log(`${RED}✗ not running${NC}`)
+  }
+
+  // Show legacy portproxy status for migration visibility
+  process.stdout.write("  Legacy port proxy rule: ")
+  const proxyRules = run("netsh interface portproxy show v4tov4", true)
+  if (proxyRules.includes(LOOPBACK_IP)) {
+    console.log(`${YELLOW}⚠ still configured${NC}`)
+  } else {
+    console.log(`${GREEN}✓ not configured${NC}`)
   }
 
   winBypassStatus()
