@@ -1,0 +1,48 @@
+{
+  "name": "agent-vibes-tray",
+  "version": "1.0.0",
+  "description": "Agent Vibes Tray App - 直连模式管理工具",
+  "main": "src/main.js",
+  "author": "Agent Vibes Team",
+  "scripts": {
+    "start": "npx electron src/main.js",
+    "pack": "npx electron-builder",
+    "pack:win": "npx electron-builder --win",
+    "pack:mac": "npx electron-builder --mac",
+    "lint": "echo 'No lint'",
+    "types": "echo 'No types'",
+    "prepare": "echo 'skip husky'"
+  },
+  "dependencies": {
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "electron": "28.3.3",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.agentvibes.tray",
+    "productName": "Agent Vibes",
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "zip",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "portable": {
+      "artifactName": "AgentVibes-Tray-${version}.exe"
+    }
+  }
+}

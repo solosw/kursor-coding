@@ -1,0 +1,739 @@
+{
+    "cursorCreds": {
+        "cppBackendUrl": "https://api3.cursor.sh",
+        "websiteUrl": "https://cursor.com",
+        "backendUrl": "https://api2.cursor.sh",
+        "authClientId": "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB",
+        "authDomain": "prod.authentication.cursor.sh",
+        "repoBackendUrl": "https://repo42.cursor.sh",
+        "telemBackendUrl": "https://api3.cursor.sh",
+        "cmdkBackendUrl": "https://api3.cursor.sh",
+        "geoCppBackendUrl": "https://api4.cursor.sh",
+        "cppConfigBackendUrl": "https://api4.cursor.sh",
+        "bcProxyUrl": "https://api2.cursor.sh",
+        "agentBackendUrlPrivacy": {
+            "default": "https://agent.api5.cursor.sh"
+        },
+        "agentBackendUrlNonPrivacy": {
+            "default": "https://agentn.api5.cursor.sh"
+        },
+        "credentialsDisplayName": "Prod"
+    },
+    "cppEnabled": false,
+    "composerState": {
+        "maxOpenTabsMode": "custom",
+        "alwaysKeepComposerInBound": true,
+        "location2": "pane",
+        "defaultCapabilities": [],
+        "autoApplyFilesOutsideContext": true,
+        "yoloCommandAllowlist": [
+            "Get-ChildItem",
+            "dir",
+            "type"
+        ],
+        "yoloCommandDenylist": [],
+        "smartAllowlistEnabled": false,
+        "smartAllowlistDenylist": [],
+        "yoloMcpToolsDisabled": false,
+        "doNotShowYoloModeWarningAgain": false,
+        "doNotShowFullYoloModeWarningAgain": false,
+        "selectedFakeStreamerId": null,
+        "yoloDeleteFileDisabled": false,
+        "yoloOutsideWorkspaceDisabled": true,
+        "yoloEnableRunEverything": false,
+        "isWebSearchToolEnabled": true,
+        "isWebSearchToolEnabled2": false,
+        "isWebSearchToolEnabled3": null,
+        "autoAcceptWebSearchTool": false,
+        "isWebFetchToolEnabled": null,
+        "webFetchDomainAllowlist": [],
+        "autoApprovedModeTransitions": [],
+        "autoRejectedModeTransitions": [],
+        "backgroundComposerEnv": "dev",
+        "useLegacyTerminalTool": false,
+        "modes4": [
+            {
+                "id": "agent",
+                "name": "Agent",
+                "actionId": "composerMode.agent",
+                "icon": "infinity",
+                "description": "Plan, search, make edits, run commands",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": true,
+                "autoFix": true,
+                "autoRun": true,
+                "fullAutoRun": false,
+                "enabledTools": [],
+                "enabledMcpServers": []
+            },
+            {
+                "id": "plan",
+                "name": "Plan",
+                "actionId": "composerMode.plan",
+                "icon": "todos",
+                "description": "Create detailed plans for accomplishing tasks",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": false,
+                "autoFix": false,
+                "autoRun": false,
+                "enabledTools": [],
+                "enabledMcpServers": []
+            },
+            {
+                "id": "chat",
+                "name": "Ask",
+                "actionId": "composerMode.chat",
+                "icon": "chat",
+                "description": "Ask Cursor questions about your codebase",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": false,
+                "autoFix": true,
+                "autoRun": false,
+                "enabledTools": [],
+                "enabledMcpServers": []
+            },
+            {
+                "id": "triage",
+                "name": "Triage",
+                "actionId": "composerMode.triage",
+                "icon": "rocket",
+                "description": "Coordinate long-horizon tasks with delegated subagents",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": false,
+                "autoFix": false,
+                "autoRun": true,
+                "fullAutoRun": false,
+                "enabledTools": [
+                    48,
+                    50
+                ],
+                "enabledMcpServers": []
+            },
+            {
+                "id": "spec",
+                "name": "Spec",
+                "actionId": "composerMode.spec",
+                "icon": "checklist",
+                "description": "Create structured plans with implementation steps",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": false,
+                "autoFix": false,
+                "autoRun": false,
+                "enabledTools": [],
+                "enabledMcpServers": []
+            },
+            {
+                "id": "debug",
+                "name": "Debug",
+                "actionId": "composerMode.debug",
+                "icon": "bug",
+                "description": "Systematically diagnose and fix bugs using runtime traces",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": true,
+                "autoFix": false,
+                "autoRun": false,
+                "enabledTools": [],
+                "enabledMcpServers": []
+            },
+            {
+                "id": "project",
+                "name": "Project",
+                "actionId": "composerMode.project",
+                "icon": "folder",
+                "description": "Special conversation mode for project-level discussions",
+                "thinkingLevel": "none",
+                "shouldAutoApplyIfNoEditTool": false,
+                "autoFix": false,
+                "autoRun": false,
+                "enabledTools": [],
+                "enabledMcpServers": []
+            }
+        ],
+        "codeBlockDisplayPreference": "collapsed",
+        "thinkingLevel": "none",
+        "composerMigrationVersion": 122,
+        "playwrightProtection": false,
+        "maxOpenTabsCustomValue": 5,
+        "autoAcceptGenerateImageTool": false
+    },
+    "systemNotificationsEnabled": true,
+    "openAIBaseUrl": null,
+    "mcpServers": [],
+    "mcpDisabledTools": [],
+    "availableDefaultModels2": [
+        {
+            "name": "claude-sonnet-4-6",
+            "defaultOn": true,
+            "parameterDefinitions": [],
+            "variants": [],
+            "legacySlugs": [],
+            "idAliases": [],
+            "supportsAgent": true,
+            "degradationStatus": 0,
+            "tooltipData": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "claude-sonnet-4-6"
+            },
+            "supportsThinking": true,
+            "supportsImages": true,
+            "supportsMaxMode": true,
+            "clientDisplayName": "claude-sonnet-4-6",
+            "serverModelName": "claude-sonnet-4-6",
+            "supportsNonMaxMode": true,
+            "tooltipDataForMaxMode": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "claude-sonnet-4-6"
+            },
+            "isRecommendedForBackgroundComposer": false,
+            "supportsPlanMode": true,
+            "inputboxShortModelName": "claude-sonnet-4-6",
+            "supportsSandboxing": true,
+            "namedModelSectionIndex": 1
+        },
+        {
+            "name": "gpt-5.4",
+            "defaultOn": true,
+            "parameterDefinitions": [],
+            "variants": [],
+            "legacySlugs": [],
+            "idAliases": [],
+            "supportsAgent": true,
+            "degradationStatus": 0,
+            "tooltipData": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "gpt-5.4"
+            },
+            "supportsThinking": true,
+            "supportsImages": true,
+            "supportsMaxMode": true,
+            "clientDisplayName": "gpt-5.4",
+            "serverModelName": "gpt-5.4",
+            "supportsNonMaxMode": true,
+            "tooltipDataForMaxMode": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "gpt-5.4"
+            },
+            "isRecommendedForBackgroundComposer": false,
+            "supportsPlanMode": true,
+            "inputboxShortModelName": "gpt-5.4",
+            "supportsSandboxing": true,
+            "namedModelSectionIndex": 1
+        },
+        {
+            "name": "claude-opus-4-6",
+            "defaultOn": true,
+            "parameterDefinitions": [],
+            "variants": [],
+            "legacySlugs": [],
+            "idAliases": [],
+            "supportsAgent": true,
+            "degradationStatus": 0,
+            "tooltipData": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "claude-opus-4-6"
+            },
+            "supportsThinking": true,
+            "supportsImages": true,
+            "supportsMaxMode": true,
+            "clientDisplayName": "claude-opus-4-6",
+            "serverModelName": "claude-opus-4-6",
+            "supportsNonMaxMode": true,
+            "tooltipDataForMaxMode": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "claude-opus-4-6"
+            },
+            "isRecommendedForBackgroundComposer": false,
+            "supportsPlanMode": true,
+            "inputboxShortModelName": "claude-opus-4-6",
+            "supportsSandboxing": true,
+            "namedModelSectionIndex": 1
+        },
+        {
+            "name": "anthropic/claude-sonnet-4.6",
+            "defaultOn": true,
+            "parameterDefinitions": [],
+            "variants": [],
+            "legacySlugs": [],
+            "idAliases": [],
+            "supportsAgent": true,
+            "degradationStatus": 0,
+            "tooltipData": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "anthropic/claude-sonnet-4.6"
+            },
+            "supportsThinking": true,
+            "supportsImages": true,
+            "supportsMaxMode": true,
+            "clientDisplayName": "anthropic/claude-sonnet-4.6",
+            "serverModelName": "anthropic/claude-sonnet-4.6",
+            "supportsNonMaxMode": true,
+            "tooltipDataForMaxMode": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "anthropic/claude-sonnet-4.6"
+            },
+            "isRecommendedForBackgroundComposer": false,
+            "supportsPlanMode": true,
+            "inputboxShortModelName": "anthropic/claude-sonnet-4.6",
+            "supportsSandboxing": true,
+            "namedModelSectionIndex": 1
+        },
+        {
+            "name": "auto",
+            "defaultOn": true,
+            "parameterDefinitions": [],
+            "variants": [],
+            "legacySlugs": [],
+            "idAliases": [],
+            "supportsAgent": true,
+            "degradationStatus": 0,
+            "tooltipData": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "auto"
+            },
+            "supportsThinking": true,
+            "supportsImages": true,
+            "supportsMaxMode": true,
+            "clientDisplayName": "auto",
+            "serverModelName": "auto",
+            "supportsNonMaxMode": true,
+            "tooltipDataForMaxMode": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "auto"
+            },
+            "isRecommendedForBackgroundComposer": false,
+            "supportsPlanMode": true,
+            "inputboxShortModelName": "auto",
+            "supportsSandboxing": true,
+            "namedModelSectionIndex": 1
+        },
+        {
+            "name": "mine-hello-abck",
+            "defaultOn": true,
+            "parameterDefinitions": [],
+            "variants": [],
+            "legacySlugs": [],
+            "idAliases": [],
+            "supportsAgent": true,
+            "degradationStatus": 0,
+            "tooltipData": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "mine-hello-des"
+            },
+            "supportsThinking": true,
+            "supportsImages": true,
+            "supportsMaxMode": true,
+            "clientDisplayName": "mine-hello",
+            "serverModelName": "mine-hello-abck",
+            "supportsNonMaxMode": true,
+            "tooltipDataForMaxMode": {
+                "primaryText": "",
+                "secondaryText": "",
+                "secondaryWarningText": false,
+                "icon": "",
+                "tertiaryText": "",
+                "tertiaryTextUrl": "",
+                "markdownContent": "mine-hello-des"
+            },
+            "isRecommendedForBackgroundComposer": false,
+            "supportsPlanMode": true,
+            "inputboxShortModelName": "mine-hello",
+            "supportsSandboxing": true,
+            "namedModelSectionIndex": 1
+        }
+    ],
+    "featureModelConfigs": {
+        "composer": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [
+                "claude-sonnet-4-6",
+                "gpt-5.4",
+                "claude-opus-4-6",
+                "anthropic/claude-sonnet-4.6",
+                "auto",
+                "mine-hello-abck"
+            ],
+            "bestOfNDefaultModels": [
+                "claude-sonnet-4-6",
+                "gpt-5.4",
+                "claude-opus-4-6",
+                "anthropic/claude-sonnet-4.6",
+                "auto",
+                "mine-hello-abck"
+            ]
+        },
+        "cmdK": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [
+                "claude-sonnet-4-6",
+                "gpt-5.4",
+                "claude-opus-4-6",
+                "anthropic/claude-sonnet-4.6",
+                "auto",
+                "mine-hello-abck"
+            ],
+            "bestOfNDefaultModels": []
+        },
+        "backgroundComposer": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [
+                "claude-sonnet-4-6",
+                "gpt-5.4",
+                "claude-opus-4-6",
+                "anthropic/claude-sonnet-4.6",
+                "auto",
+                "mine-hello-abck"
+            ],
+            "bestOfNDefaultModels": [
+                "claude-sonnet-4-6",
+                "gpt-5.4",
+                "claude-opus-4-6",
+                "anthropic/claude-sonnet-4.6",
+                "auto",
+                "mine-hello-abck"
+            ]
+        },
+        "planExecution": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [
+                "claude-sonnet-4-6",
+                "gpt-5.4",
+                "claude-opus-4-6",
+                "anthropic/claude-sonnet-4.6",
+                "auto",
+                "mine-hello-abck"
+            ],
+            "bestOfNDefaultModels": []
+        },
+        "spec": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [],
+            "bestOfNDefaultModels": []
+        },
+        "deepSearch": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [],
+            "bestOfNDefaultModels": []
+        },
+        "quickAgent": {
+            "defaultModel": "claude-sonnet-4-6",
+            "fallbackModels": [],
+            "bestOfNDefaultModels": []
+        }
+    },
+    "backgroundComposerState": {},
+    "dialogDontAskAgainPreferences": {},
+    "cursorIgnore": {
+        "hierarchicalEnabled": false,
+        "ignoreSymlinks": false
+    },
+    "teamAdminSettings": {
+        "cursorIgnore": {
+            "hierarchicalEnabled": false,
+            "ignoreSymlinks": false
+        },
+        "extensionSigningSettings": {
+            "verificationEnabled": false
+        }
+    },
+    "shouldShowViewZoneWhenPreviewBoxIsClipped6": false,
+    "isFirstLoadForAutoVariants": false,
+    "cppModelsState": {
+        "cppModels": [
+            "fast"
+        ]
+    },
+    "aiSettings": {
+        "modelConfig": {
+            "cmd-k": {
+                "modelName": "claude-sonnet-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            },
+            "composer": {
+                "modelName": "claude-opus-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            },
+            "background-composer": {
+                "modelName": "default",
+                "maxMode": true,
+                "selectedModels": null
+            },
+            "composer-ensemble": {
+                "modelName": "claude-sonnet-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            },
+            "plan-execution": {
+                "modelName": "claude-sonnet-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            },
+            "spec": {
+                "modelName": "claude-sonnet-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            },
+            "deep-search": {
+                "modelName": "claude-sonnet-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            },
+            "quick-agent": {
+                "modelName": "claude-sonnet-4-6",
+                "maxMode": false,
+                "selectedModels": null
+            }
+        },
+        "modelsWithNoDefaultSwitch": [
+            "claude-sonnet-4-6",
+            "gpt-5.4",
+            "claude-opus-4-6",
+            "anthropic/claude-sonnet-4.6",
+            "auto",
+            "mine-hello-abck"
+        ],
+        "modelDefaultSwitchOnNewChat": false,
+        "completedModelMigrations": [
+            "sonnet-4-to-4-5-2025-01-composer-claude-4-sonnet",
+            "sonnet-4-to-4-5-2025-01-background-composer-claude-4-sonnet",
+            "sonnet-4-to-4-5-2025-01-plan-execution-claude-4-sonnet",
+            "sonnet-4-thinking-to-4-5-thinking-2025-01-composer-claude-4-sonnet-thinking",
+            "sonnet-4-thinking-to-4-5-thinking-2025-01-background-composer-claude-4-sonnet-thinking",
+            "sonnet-4-thinking-to-4-5-thinking-2025-01-plan-execution-claude-4-sonnet-thinking",
+            "sonnet-4-to-4-5-2025-nov-8-composer-claude-4-sonnet",
+            "sonnet-4-to-4-5-2025-nov-8-background-composer-claude-4-sonnet",
+            "sonnet-4-to-4-5-2025-nov-8-plan-execution-claude-4-sonnet",
+            "sonnet-4-thinking-to-4-5-thinking-2025-nov-8-composer-claude-4-sonnet-thinking",
+            "sonnet-4-thinking-to-4-5-thinking-2025-nov-8-background-composer-claude-4-sonnet-thinking",
+            "sonnet-4-thinking-to-4-5-thinking-2025-nov-8-plan-execution-claude-4-sonnet-thinking",
+            "sonnet-4-5-to-opus-4-5-2025-12-01-composer-claude-4.5-sonnet",
+            "sonnet-4-5-to-opus-4-5-2025-12-01-background-composer-claude-4.5-sonnet",
+            "sonnet-4-5-to-opus-4-5-2025-12-01-plan-execution-claude-4.5-sonnet",
+            "sonnet-4-5-thinking-to-opus-4-5-2025-12-01-composer-claude-4.5-sonnet-thinking",
+            "sonnet-4-5-thinking-to-opus-4-5-2025-12-01-background-composer-claude-4.5-sonnet-thinking",
+            "sonnet-4-5-thinking-to-opus-4-5-2025-12-01-plan-execution-claude-4.5-sonnet-thinking",
+            "codex-max-2025-12-05-composer-gpt-5.1-codex",
+            "codex-max-2025-12-05-background-composer-gpt-5.1-codex",
+            "codex-max-2025-12-05-plan-execution-gpt-5.1-codex",
+            "codex-max-low-2025-12-05-composer-gpt-5.1-codex-low",
+            "codex-max-low-2025-12-05-background-composer-gpt-5.1-codex-low",
+            "codex-max-low-2025-12-05-plan-execution-gpt-5.1-codex-low",
+            "codex-max-high-2025-12-05-composer-gpt-5.1-codex-high",
+            "codex-max-high-2025-12-05-background-composer-gpt-5.1-codex-high",
+            "codex-max-high-2025-12-05-plan-execution-gpt-5.1-codex-high",
+            "codex-max-fast-2025-12-05-composer-gpt-5.1-codex-fast",
+            "codex-max-fast-2025-12-05-background-composer-gpt-5.1-codex-fast",
+            "codex-max-fast-2025-12-05-plan-execution-gpt-5.1-codex-fast",
+            "codex-max-high-fast-2025-12-05-composer-gpt-5.1-codex-high-fast",
+            "codex-max-high-fast-2025-12-05-background-composer-gpt-5.1-codex-high-fast",
+            "codex-max-high-fast-2025-12-05-plan-execution-gpt-5.1-codex-high-fast",
+            "codex-max-low-fast-2025-12-05-composer-gpt-5.1-codex-low-fast",
+            "codex-max-low-fast-2025-12-05-background-composer-gpt-5.1-codex-low-fast",
+            "codex-max-low-fast-2025-12-05-plan-execution-gpt-5.1-codex-low-fast"
+        ],
+        "modelOverrideEnabled": [],
+        "modelOverrideDisabled": [],
+        "teamIds": [],
+        "previousModelBeforeDefault": {
+            "cmd-k": "claude-sonnet-4-6",
+            "composer": "auto",
+            "composer-ensemble": "claude-sonnet-4-6",
+            "plan-execution": "claude-sonnet-4-6",
+            "spec": "claude-sonnet-4-6",
+            "deep-search": "claude-sonnet-4-6",
+            "quick-agent": "claude-sonnet-4-6"
+        }
+    },
+    "authenticationSettings": {
+        "githubLoggedIn": false
+    },
+    "cmdLineHookState": {
+        "ignored": false,
+        "timesShown": 2,
+        "remindLaterDate": "1774681482196"
+    },
+    "shouldOnlyImportOnAccept": true,
+    "cppAutoImportDecorationStyle": "squiggle",
+    "newUserData": {
+        "toolUsageCount": {
+            "plainChat": 0,
+            "contextChat": 0,
+            "intentChat": 0
+        }
+    },
+    "azureState": {
+        "useAzure": false
+    },
+    "personalDocs": [],
+    "cppInCmdF": true,
+    "cppTriggerInComments": true,
+    "cppShowWhitespaceOnlyChanges": false,
+    "indexRepository": true,
+    "haveNotImportedFromVSC": false,
+    "shouldAutoParseCmdKLinks": false,
+    "autoCreateNewChatAfterTimeout": true,
+    "isFileSyncClientEnabled": true,
+    "fastApplyModelType": 1,
+    "explicitlyEnableSemanticSearch": false,
+    "backgroundComposerEnv": "prod",
+    "preferredEmbeddingModel": 0,
+    "oneTimeSettings": {
+        "shouldDisableGithubCopilot": false,
+        "hasAcceptedMaxModeConfirmation": false
+    },
+    "eligibleForSnippetLearning": true,
+    "goneThroughCodeSnippetOnboarding": false,
+    "goneThroughCodeSnippetChangeManagement": false,
+    "hasResetModelOnce": true,
+    "rpcFileLoggerEnabled": false,
+    "membershipType": "pro",
+    "teamBlockRepos": [],
+    "teamBlocklist": [],
+    "lastComposerOpenTime": 1775714958699,
+    "havePerformedSettingsServiceMigration": true,
+    "cppHasLoadedConfigFromCopilot": true,
+    "cliDetectionStatus": {
+        "claudeStatus": "installed",
+        "codexStatus": "installed",
+        "agentStatus": "not_found",
+        "checkedAt": 1775714960846,
+        "firstCompetingCliDetectedAt": 1774192121356
+    },
+    "SPECIAL_KEY_id": "2d750207-9838-4e99-95f1-495c0f296bfe",
+    "noStorageMode": true,
+    "privacyModeVersionToggle": false,
+    "hasBedrockIamRole": false,
+    "isEnterprise": false,
+    "useOpenAIKey": false,
+    "onboardingDataPrivacyVersion": "new",
+    "useModelParameters": false,
+    "cppConfig": {
+        "heuristics": [
+            4,
+            5,
+            6,
+            2
+        ],
+        "excludeRecentlyViewedFilesPatterns": [
+            ".env",
+            ".production",
+            ".pem",
+            ".cursor-retrieval.",
+            ".cursor-always-local.",
+            ".svg",
+            ".lock",
+            ".jsonl",
+            ".csv",
+            ".tsv",
+            "Copilot++"
+        ],
+        "enableRvfTracking": true,
+        "globalDebounceDurationMillis": 70,
+        "clientDebounceDurationMillis": 50,
+        "cppUrl": "https://api3.cursor.sh",
+        "useWhitespaceDiffHistory": true,
+        "enableFilesyncDebounceSkipping": false,
+        "checkFilesyncHashPercent": 0.004999999888241291,
+        "geoCppBackendUrl": "",
+        "isFusedCursorPredictionModel": true,
+        "includeUnchangedLines": false,
+        "shouldFetchRvfText": false,
+        "allowsTabChunks": true,
+        "aboveRadius": 1,
+        "belowRadius": 2,
+        "isOn": true,
+        "isGhostText": true,
+        "shouldLetUserEnableCppEvenIfNotPro": true,
+        "importPredictionConfig": {
+            "isDisabledByBackend": false,
+            "shouldTurnOnAutomatically": true,
+            "pythonEnabled": false
+        },
+        "recentlyRejectedEditThresholds": {
+            "hardRejectThreshold": 2,
+            "softRejectThreshold": 5
+        },
+        "maxNumberOfClearedSuggestionsSinceLastAccept": 20,
+        "suggestionHintConfig": {
+            "importantLspExtensions": [
+                "vscode.typescript-language-features",
+                "ms-python.python",
+                "rust-lang.rust-analyzer",
+                "golang.go"
+            ],
+            "enabledForPathExtensions": [
+                ".ts",
+                ".tsx",
+                ".py",
+                ".js",
+                ".go",
+                ".rs"
+            ]
+        },
+        "tabContextRefreshDebounceMs": 1000,
+        "tabContextRefreshEditorChangeDebounceMs": 1000
+    },
+    "backendHasDisabledCppAutoImport": false,
+    "cppAutoImportEnabled": true,
+    "cppShown": 1,
+    "enoughTimeElapsedSinceOnboarding": true,
+    "hasSentMarkPrivacyAfterWaitingPeriod": true,
+    "useClaudeKey": false,
+    "useReactModelPicker": true
+}

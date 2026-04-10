@@ -1,0 +1,95 @@
+{
+  "name": "agent-vibes",
+  "version": "1.0.0",
+  "description": "Unified Agent Gateway — Enables Claude Code CLI and Cursor IDE to use free AI backends through protocol translation",
+  "private": true,
+  "bin": {
+    "agent-vibes": "bin/agent-vibes"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/funny-vibes/agent-vibes.git"
+  },
+  "homepage": "https://github.com/funny-vibes/agent-vibes#readme",
+  "bugs": {
+    "url": "https://github.com/funny-vibes/agent-vibes/issues"
+  },
+  "author": "recronin",
+  "keywords": [
+    "agent-vibes",
+    "cursor",
+    "claude-code",
+    "antigravity",
+    "codex",
+    "ai-gateway",
+    "nestjs"
+  ],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "dev": "turbo run dev",
+    "release": "node scripts/git/release.js",
+    "build": "turbo run build",
+    "pack": "npm --workspace apps/vscode-extension run pack",
+    "pack:fast": "npm --workspace apps/vscode-extension run pack:fast",
+    "start": "turbo run start",
+    "start:debug": "turbo run start:debug",
+    "test": "turbo run test",
+    "format": "prettier --check \"**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,md,yml,yaml}\"",
+    "format:fix": "prettier --write \"**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,md,yml,yaml}\"",
+    "lint": "turbo run lint",
+    "types": "turbo run types",
+    "lint:fix": "turbo run lint:fix",
+    "clean": "node scripts/clean-dist.js",
+    "clean:all": "npm run clean && node scripts/rm-paths.js node_modules",
+    "cursor:patch": "node bin/agent-vibes patch",
+    "cursor:debug": "node scripts/cursor/debug.js",
+    "cursor:patch:restore": "node bin/agent-vibes patch --restore",
+    "cursor:patch:status": "node bin/agent-vibes patch --status",
+    "cursor:cert": "node bin/agent-vibes cert",
+    "cursor:forward:on": "node bin/agent-vibes forward on",
+    "cursor:forward:off": "node bin/agent-vibes forward off",
+    "cursor:forward:status": "node bin/agent-vibes forward status",
+    "direct": "node bin/agent-vibes --mode direct",
+    "direct:debug": "$env:LOG_DEBUG=true; node bin/agent-vibes --mode direct",
+    "tray:build": "npm --workspace apps/tray-app run build",
+    "tray:dev": "npm --workspace apps/tray-app run dev",
+    "tray:pack": "npm --workspace apps/tray-app run pack",
+    "tray:pack:win": "npm --workspace apps/tray-app run pack:win",
+    "antigravity:sync": "node bin/agent-vibes sync",
+    "claude:sync": "node bin/agent-vibes sync --claude",
+    "codex:sync": "node bin/agent-vibes sync --codex",
+    "antigravity:capture:start": "node bin/agent-vibes capture start",
+    "antigravity:capture:stop": "node bin/agent-vibes capture stop",
+    "antigravity:capture:status": "node bin/agent-vibes capture status",
+    "antigravity:capture:repair": "node bin/agent-vibes capture repair",
+    "issues": "node bin/agent-vibes issues",
+    "deploy:sync": "node bin/agent-vibes sync --deploy"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "markdownlint-cli2": "^0.20.0",
+    "prettier": "^3.7.4",
+    "tsx": "^4.21.0",
+    "turbo": "^2.6.3"
+  },
+  "prettier": "@workspace/prettier-config",
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  },
+  "packageManager": "npm@11.6.4",
+  "dependencies": {
+    "socks-proxy-agent": "^8.0.5"
+  }
+}

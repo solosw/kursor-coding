@@ -1,0 +1,491 @@
+#!/usr/bin/env node
+/**
+ * agent-vibes CLI — Unified Agent Gateway
+ *
+ * Usage:
+ *   agent-vibes                          Start the gateway server
+ *   agent-vibes cert                     Generate SSL certificates
+ *   agent-vibes sync --ide|--tools [--accounts-file PATH]
+ *                                         Sync Antigravity credentials
+ *   agent-vibes sync --claude [--accounts-file PATH]
+ *                                         Sync Claude Code third-party credentials
+ *   agent-vibes sync --codex [--accounts-file PATH]
+ *                                         Sync Codex credentials
+ *   agent-vibes forward hosts|on|off|status
+ *   agent-vibes sync --deploy [--run]    Deploy credentials to GitHub Secrets
+ *   agent-vibes --version                Show version
+ *   agent-vibes --help                   Show help
+ */
+
+const path = require("path")
+const fs = require("fs")
+const { spawnSync } = require("child_process")
+
+const ROOT = path.resolve(__dirname, "..")
+const rawArgs = process.argv.slice(2)
+
+function pickOption(argv, longName) {
+  const equalsPrefix = `${longName}=`
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index]
+    if (arg === longName) {
+      return argv[index + 1]
+    }
+    if (typeof arg === "string" && arg.startsWith(equalsPrefix)) {
+      return arg.slice(equalsPrefix.length)
+    }
+  }
+  return undefined
+}
+
+function stripOption(argv, longName) {
+  const equalsPrefix = `${longName}=`
+  const nextArgs = []
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index]
+    if (arg === longName) {
+      index += 1
+      continue
+    }
+    if (typeof arg === "string" && arg.startsWith(equalsPrefix)) {
+      continue
+    }
+    nextArgs.push(arg)
+  }
+  return nextArgs
+}
+
+const modeArg = pickOption(rawArgs, "--mode")
+const apisConfigArg = pickOption(rawArgs, "--apis-config")
+const args = stripOption(stripOption(rawArgs, "--mode"), "--apis-config")
+const command = args[0]
+
+// --version
+if (args.includes("--version") || args.includes("-v")) {
+  const pkg = JSON.parse(
+    fs.readFileSync(
+      path.join(ROOT, "apps", "protocol-bridge", "package.json"),
+      "utf-8"
+    )
+  )
+  console.log(`agent-vibes v${pkg.version}`)
+  process.exit(0)
+}
+
+// --help
+if (
+  command === "help" ||
+  command === "--help" ||
+  command === "-h" ||
+  (!command && (args.includes("--help") || args.includes("-h")))
+) {
+  console.log(`
+agent-vibes — Unified Agent Gateway
+
+Enables Claude Code CLI and Cursor IDE to use Antigravity AI backends
+through protocol translation.
+
+Usage:
+  agent-vibes [--mode MODE] [--apis-config PATH]
+                                      Start the gateway server
+  agent-vibes --version               Show version
+  agent-vibes --help                  Show help
+
+Configuration:
+  Runtime:
+    --mode MODE                       Routing mode: standard | direct
+    --apis-config PATH                Path to direct-mode apis.yaml / apis.yml
+
+  Antigravity:
+    agent-vibes sync --ide            Sync credentials from Antigravity IDE
+    agent-vibes sync --tools          Sync credentials from Antigravity Manager
+  Claude:
+    agent-vibes sync --claude         Sync credentials from Claude Code settings
+  Codex:
+    agent-vibes sync --codex          Sync credentials from Codex CLI auth.json
+
+  All sync commands support:
+    --accounts-file PATH              Write to a specific accounts JSON file
+  Cursor:
+    agent-vibes cert                  Generate SSL certificates (requires mkcert)
+    agent-vibes forward hosts         Print /etc/hosts entries
+    agent-vibes forward on            Enable port forwarding (requires sudo)
+    agent-vibes forward off           Disable port forwarding (requires sudo)
+    agent-vibes forward status        Show forwarding status
+
+Deployment:
+  agent-vibes sync --deploy           Deploy credentials to GitHub Secrets
+  agent-vibes sync --deploy --run     Deploy + trigger CI/CD workflow
+
+Advanced:
+  agent-vibes patch                   Patch Cursor binary for proxy
+  agent-vibes patch --restore         Restore original Cursor binary
+  agent-vibes patch --status          Check Cursor patch status
+  agent-vibes capture start           Start traffic capture (Clash + mitmdump)
+  agent-vibes capture stop            Stop traffic capture
+  agent-vibes capture status          Show capture status
+  agent-vibes capture repair          Repair stale capture injection
+  agent-vibes issues                  Collect diagnostics for bug reports
+
+Documentation: https://github.com/funny-vibes/agent-vibes
+`)
+  process.exit(0)
+}
+
+function run(commandName, commandArgs, opts = {}) {
+  const result = spawnSync(commandName, commandArgs, {
+    cwd: ROOT,
+    stdio: "inherit",
+    ...opts,
+  })
+  if (result.error) {
+    console.error(result.error.message)
+    process.exit(1)
+  }
+  process.exit(result.status ?? 1)
+}
+
+function nodeScript(scriptPath, scriptArgs = [], opts = {}) {
+  run(process.execPath, [path.join(ROOT, scriptPath), ...scriptArgs], opts)
+}
+
+function tsxScript(scriptPath, scriptArgs = [], opts = {}) {
+  run(
+    process.execPath,
+    ["--import", "tsx", path.join(ROOT, scriptPath), ...scriptArgs],
+    opts
+  )
+}
+
+if (command === "sync") {
+  if (args.includes("--deploy")) {
+    nodeScript("scripts/accounts/sync-deploy.js", args.slice(1))
+  } else if (args.includes("--claude")) {
+    nodeScript(
+      "scripts/accounts/sync-claude-account.js",
+      args.slice(1).filter((arg) => arg !== "--claude")
+    )
+  } else if (args.includes("--codex")) {
+    nodeScript(
+      "scripts/accounts/sync-codex-account.js",
+      args.slice(1).filter((arg) => arg !== "--codex")
+    )
+  } else {
+    nodeScript("scripts/accounts/sync-antigravity-accounts.js", args.slice(1))
+  }
+}
+
+if (command === "cert") {
+  const GREEN = "\x1b[0;32m"
+  const RED = "\x1b[0;31m"
+  const YELLOW = "\x1b[1;33m"
+  const CYAN = "\x1b[0;36m"
+  const DIM = "\x1b[2m"
+  const NC = "\x1b[0m"
+
+  // Verify mkcert is available
+  const mkcertCheck = spawnSync(
+    process.platform === "win32" ? "where" : "which",
+    ["mkcert"],
+    { encoding: "utf-8", stdio: "pipe" }
+  )
+  if (mkcertCheck.status !== 0) {
+    console.error(`${RED}Error: mkcert is not installed or not in PATH.${NC}\n`)
+    if (process.platform === "darwin") {
+      console.error("  Install with: brew install mkcert")
+    } else if (process.platform === "win32") {
+      console.error("  Install with: choco install mkcert  (or scoop install mkcert)")
+    } else {
+      console.error("  Install with: sudo apt install mkcert  (or see https://github.com/FiloSottile/mkcert)")
+    }
+    process.exit(1)
+  }
+
+  // ── Step 1: Auto-install mkcert CA if not yet installed ──────────────
+  const caRoot = spawnSync("mkcert", ["-CAROOT"], {
+    encoding: "utf-8",
+    stdio: "pipe",
+  }).stdout.trim()
+
+  const caRootPem = path.join(caRoot, "rootCA.pem")
+  const caInstalled = fs.existsSync(caRootPem)
+
+  if (!caInstalled) {
+    console.log(`\n${CYAN}▸ Installing mkcert local CA...${NC}`)
+  } else {
+    console.log(`\n${CYAN}▸ Ensuring mkcert local CA is installed in trust store...${NC}`)
+  }
+  const installResult = spawnSync("mkcert", ["-install"], {
+    stdio: "inherit",
+    encoding: "utf-8",
+  })
+  if (installResult.status !== 0) {
+    console.error(`${RED}✗ mkcert -install failed. You may need to run it manually.${NC}`)
+  }
+
+  // ── Step 2: macOS — Verify & remediate CA trust in System Keychain ──
+  if (process.platform === "darwin" && fs.existsSync(caRootPem)) {
+    console.log(`\n${CYAN}▸ Verifying CA trust in macOS Keychain...${NC}`)
+
+    // Check if CA is trusted using security verify-cert
+    const verifyResult = spawnSync("security", ["verify-cert", "-c", caRootPem], {
+      encoding: "utf-8",
+      stdio: "pipe",
+    })
+
+    if (verifyResult.status !== 0) {
+      console.log(`${YELLOW}⚠ CA not fully trusted by macOS. Attempting to fix...${NC}`)
+
+      // Try to add to System keychain with explicit trust
+      const addResult = spawnSync("sudo", [
+        "security", "add-trusted-cert",
+        "-d",             // admin trust domain
+        "-r", "trustRoot",
+        "-k", "/Library/Keychains/System.keychain",
+        caRootPem,
+      ], { stdio: "inherit" })
+
+      if (addResult.status === 0) {
+        console.log(`${GREEN}✓${NC} CA added to System Keychain as trusted root`)
+      } else {
+        console.log(`${YELLOW}⚠ Automatic trust failed (macOS Sonoma+ may require manual approval).${NC}`)
+        console.log(`  Please open Keychain Access, find "mkcert" in System keychain,`)
+        console.log(`  double-click → Trust → set "When using this certificate" to "Always Trust"`)
+      }
+    } else {
+      console.log(`${GREEN}✓${NC} CA is trusted by macOS`)
+    }
+  }
+
+  // ── Step 3: Generate certificates ───────────────────────────────────
+  console.log(`\n${CYAN}▸ Generating SSL certificates...${NC}`)
+  const certDir = path.join(ROOT, "apps", "protocol-bridge", "certs")
+  if (!fs.existsSync(certDir)) {
+    fs.mkdirSync(certDir, { recursive: true })
+  }
+
+  const mkcertResult = spawnSync(
+    "mkcert",
+    [
+      "-cert-file",
+      "localhost.crt",
+      "-key-file",
+      "localhost.key",
+      "localhost",
+      "*.api5.cursor.sh",
+      "*.cursor.sh",
+      "api2.cursor.sh",
+      "api2geo.cursor.sh",
+      "api2direct.cursor.sh",
+      "agent.api2.cursor.sh",
+      "agentn.api2.cursor.sh",
+      "agent.api2geo.cursor.sh",
+      "agentn.api2geo.cursor.sh",
+      "agent.api2direct.cursor.sh",
+      "agentn.api2direct.cursor.sh",
+      "agent.api5.cursor.sh",
+      "agentn.api5.cursor.sh",
+      "agent.api5geo.cursor.sh",
+      "agent.api5lat.cursor.sh",
+      "agentn.api5geo.cursor.sh",
+      "agentn.api5lat.cursor.sh",
+      "agent-gcpp-uswest.api5.cursor.sh",
+      "agent-gcpp-eucentral.api5.cursor.sh",
+      "agent-gcpp-apsoutheast.api5.cursor.sh",
+      "agentn-gcpp-uswest.api5.cursor.sh",
+      "agentn-gcpp-eucentral.api5.cursor.sh",
+      "agentn-gcpp-apsoutheast.api5.cursor.sh",
+      "agent.us.api5.cursor.sh",
+      "agent.eu.api5.cursor.sh",
+      "agent.ap.api5.cursor.sh",
+      "agentn.us.api5.cursor.sh",
+      "agentn.eu.api5.cursor.sh",
+      "agentn.ap.api5.cursor.sh",
+      "a.cursor.sh",
+      "127.0.0.1",
+      "127.0.0.2",
+      "127.0.0.3",
+      "::1",
+    ],
+    { cwd: certDir, stdio: "inherit" }
+  )
+  if (mkcertResult.status !== 0) {
+    console.error(`${RED}✗ Certificate generation failed${NC}`)
+    process.exit(1)
+  }
+
+  // ── Step 4: Configure NODE_EXTRA_CA_CERTS for Electron/Node.js ──────
+  // Electron's Node.js layer (Extension Host, gRPC client) does NOT read
+  // macOS System Keychain. It needs NODE_EXTRA_CA_CERTS to trust mkcert CA.
+  if (fs.existsSync(caRootPem)) {
+    console.log(`\n${CYAN}▸ Configuring NODE_EXTRA_CA_CERTS for Cursor (Electron/Node.js)...${NC}`)
+
+    const exportLine = `export NODE_EXTRA_CA_CERTS="${caRootPem}"`
+    let configured = false
+
+    // Detect shell profile
+    const home = process.env.HOME || process.env.USERPROFILE || ""
+    const shellProfiles = process.platform === "win32"
+      ? [] // Windows: handled separately
+      : [
+          path.join(home, ".zshrc"),
+          path.join(home, ".bashrc"),
+          path.join(home, ".bash_profile"),
+        ]
+
+    for (const profile of shellProfiles) {
+      if (!fs.existsSync(profile)) continue
+
+      const content = fs.readFileSync(profile, "utf-8")
+      if (content.includes("NODE_EXTRA_CA_CERTS") && content.includes(caRootPem)) {
+        console.log(`${GREEN}✓${NC} NODE_EXTRA_CA_CERTS already configured in ${path.basename(profile)}`)
+        configured = true
+        break
+      }
+    }
+
+    if (!configured) {
+      // Find the first existing shell profile to append to
+      const targetProfile = shellProfiles.find((p) => fs.existsSync(p))
+
+      if (targetProfile) {
+        const marker = "# Added by agent-vibes cert (Electron/Node.js CA trust)"
+        const block = `\n${marker}\n${exportLine}\n`
+
+        // Check if we already have our marker (with possibly outdated path)
+        const content = fs.readFileSync(targetProfile, "utf-8")
+        if (content.includes(marker)) {
+          // Replace existing block
+          const updated = content.replace(
+            new RegExp(`\n${marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n[^\\n]*\\n`),
+            block
+          )
+          fs.writeFileSync(targetProfile, updated)
+        } else {
+          fs.appendFileSync(targetProfile, block)
+        }
+        console.log(`${GREEN}✓${NC} Added NODE_EXTRA_CA_CERTS to ${path.basename(targetProfile)}`)
+        console.log(`  ${DIM}Run: source ~/${path.basename(targetProfile)}${NC}`)
+      } else if (process.platform !== "win32") {
+        console.log(`${YELLOW}⚠${NC} Could not find shell profile. Please add manually:`)
+        console.log(`  ${exportLine}`)
+      }
+
+      if (process.platform === "win32") {
+        console.log(`${YELLOW}▸${NC} Windows: Set environment variable manually:`)
+        console.log(`  setx NODE_EXTRA_CA_CERTS "${caRootPem}"`)
+      }
+    }
+
+    // Also set it for the current process (if server starts after cert)
+    process.env.NODE_EXTRA_CA_CERTS = caRootPem
+  }
+
+  // ── Step 5: Verification summary ────────────────────────────────────
+  const certFile = path.join(certDir, "localhost.crt")
+  const keyFile = path.join(certDir, "localhost.key")
+
+  console.log(`\n${CYAN}═══ Certificate Setup Summary ═══${NC}`)
+  console.log(`  CA Root:     ${GREEN}${caRootPem}${NC}`)
+  console.log(`  Certificate: ${fs.existsSync(certFile) ? GREEN + "✓" : RED + "✗"} ${certFile}${NC}`)
+  console.log(`  Key:         ${fs.existsSync(keyFile) ? GREEN + "✓" : RED + "✗"} ${keyFile}${NC}`)
+
+  // Verify cert matches key
+  if (fs.existsSync(certFile) && fs.existsSync(keyFile)) {
+    const certMod = spawnSync("openssl", ["x509", "-noout", "-modulus", "-in", certFile], {
+      encoding: "utf-8", stdio: "pipe",
+    })
+    const keyMod = spawnSync("openssl", ["rsa", "-noout", "-modulus", "-in", keyFile], {
+      encoding: "utf-8", stdio: "pipe",
+    })
+    if (certMod.stdout && keyMod.stdout && certMod.stdout.trim() === keyMod.stdout.trim()) {
+      console.log(`  Key Match:   ${GREEN}✓${NC} certificate and key match`)
+    } else {
+      console.log(`  Key Match:   ${RED}✗${NC} certificate and key DO NOT match!`)
+    }
+
+    // Verify cert chain against CA
+    const chainResult = spawnSync("openssl", [
+      "verify", "-CAfile", caRootPem, certFile,
+    ], { encoding: "utf-8", stdio: "pipe" })
+    if (chainResult.status === 0) {
+      console.log(`  Chain:       ${GREEN}✓${NC} certificate chain is valid`)
+    } else {
+      console.log(`  Chain:       ${RED}✗${NC} certificate chain verification failed`)
+      console.log(`  ${DIM}${(chainResult.stderr || "").trim()}${NC}`)
+    }
+  }
+
+  console.log("")
+  if (process.platform === "darwin") {
+    console.log(`${YELLOW}Important:${NC} After running this command, ${YELLOW}fully quit and restart Cursor${NC}`)
+    console.log(`(Cmd+Q, not just close window) for the certificate changes to take effect.`)
+  } else {
+    console.log(`${YELLOW}Important:${NC} Restart Cursor for the certificate changes to take effect.`)
+  }
+  console.log("")
+
+  process.exit(0)
+}
+
+if (command === "patch") {
+  tsxScript("scripts/cursor/patch_transport.ts", args.slice(1), {
+    env: {
+      ...process.env,
+      NO_PROXY: "127.0.0.1,localhost,127.0.0.2,*.cursor.sh,*.azureedge.net",
+    },
+  })
+}
+
+if (command === "forward") {
+  const subCmd = args[1] || "status"
+  if (subCmd === "on" || subCmd === "off") {
+    if (process.platform === "win32") {
+      // Windows: node script checks for admin internally
+      nodeScript("scripts/proxy/setup-forwarding.js", [subCmd])
+    } else {
+      run("sudo", [process.execPath, path.join(ROOT, "scripts/proxy/setup-forwarding.js"), subCmd])
+    }
+  } else {
+    nodeScript("scripts/proxy/setup-forwarding.js", [subCmd])
+  }
+}
+
+if (command === "issues") {
+  nodeScript("scripts/diagnostics/collect-issue-logs.js", args.slice(1))
+}
+
+if (command === "capture") {
+  const subCmd = args[1] || "status"
+  if (process.platform === "win32") {
+    // Windows: no sudo, scripts check elevation internally
+    nodeScript("scripts/capture/capture.js", [subCmd])
+  } else {
+    run("sudo", [process.execPath, path.join(ROOT, "scripts/capture/capture.js"), subCmd])
+  }
+}
+
+// Default: start server
+const allowedModes = new Set(["standard", "direct"])
+if (modeArg && !allowedModes.has(modeArg)) {
+  console.error(`Error: Unsupported --mode value '${modeArg}'. Use 'standard' or 'direct'.`)
+  process.exit(1)
+}
+
+if (modeArg) {
+  process.env.AGENT_VIBES_ROUTING_MODE = modeArg
+}
+if (apisConfigArg) {
+  process.env.AGENT_VIBES_APIS_CONFIG_PATH = path.resolve(apisConfigArg)
+}
+
+const mainPath = path.join(ROOT, "apps", "protocol-bridge", "dist", "main.js")
+
+if (!fs.existsSync(mainPath)) {
+  console.error(
+    "Error: Server not built. Run 'npm run build' in apps/protocol-bridge first."
+  )
+  process.exit(1)
+}
+
+require(mainPath)
