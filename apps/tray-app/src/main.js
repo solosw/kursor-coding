@@ -13,6 +13,7 @@ const DEFAULT_AUTH_FIELDS = [
 
 let tray = null
 let controlWindow = null
+let logWindow = null
 let launchedServerPid = null
 let launchedServerProcess = null
 let isServerRunning = false
@@ -89,6 +90,7 @@ function appendTrayLog(message, level = "info") {
     trayLogs = trayLogs.slice(-500)
   }
   refreshControlWindow()
+  refreshLogWindow()
 }
 
 function getTrayLogsText() {
@@ -105,6 +107,7 @@ function getTrayLogsForView() {
 
 function clearTrayLogs() {
   trayLogs = []
+  refreshLogWindow()
 }
 
 function escapeHtml(value) {
@@ -439,10 +442,23 @@ async function applyAccountAuth() {
   }
 }
 
-async function ensureAgentVibesAvailable() {
+async function resolveAgentVibesCommandPath() {
   const lookupCommand = process.platform === "win32" ? "where" : "which"
   const result = await runCommand(lookupCommand, [AGENT_VIBES_COMMAND])
-  return result.code === 0
+  if (result.code !== 0) {
+    return null
+  }
+
+  const match = (result.stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean)
+
+  return match || null
+}
+
+async function ensureAgentVibesAvailable() {
+  return (await resolveAgentVibesCommandPath()) !== null
 }
 
 function startAgentVibesProcess() {
@@ -733,7 +749,6 @@ function getControlWindowHtml() {
       : "尚未初始化认证"
   const configPath = getApisConfigPath()
   const models = readModelsConfig()
-  const logs = getTrayLogsForView()
   const modelsMarkup = models.length
     ? models.map((model, index) => `
       <div class="model-item">
@@ -782,7 +797,9 @@ function getControlWindowHtml() {
     .log-entry__time { color: #93c5fd; margin-right: 8px; }
     .log-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
     .log-hint { color: #9ca3af; font-size: 12px; margin-top: 8px; }
-    button { border: 0; border-radius: 10px; padding: 12px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; }
+    button { border: 0; border-radius: 10px; padding: 12px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; transition: filter 0.15s ease, transform 0.15s ease; }
+    button:hover { filter: brightness(1.05); }
+    button:active { transform: translateY(1px); }
     button.secondary { background: #374151; }
     button.warn { background: #b45309; }
     button.small { padding: 8px 10px; font-size: 12px; }
@@ -814,6 +831,7 @@ function getControlWindowHtml() {
         <button class="secondary" onclick="window.trayApi.applyAccountAuth()">写入账号认证</button>
         <button class="secondary" onclick="window.trayApi.runDiagnostics()">网络诊断</button>
         <button class="warn" onclick="window.trayApi.fixProxyBypassRules()">修复代理规则</button>
+        <button class="secondary" onclick="window.trayApi.openLogs()">打开日志窗口</button>
       </div>
     </div>
     <div class="card">
@@ -868,48 +886,16 @@ function getControlWindowHtml() {
       </div>
     </div>
     <div class="card">
-      <div class="section-title">运行日志</div>
-      <div id="tray-logs" class="log-panel"></div>
-      <div class="log-actions">
-        <button class="secondary" onclick="window.trayApi.copyLogs()">复制日志</button>
-        <button class="secondary" onclick="window.trayApi.clearLogs()">清空日志</button>
-        <button class="secondary" onclick="window.trayApi.saveLogs()">保存到文件</button>
+      <div class="section-title">日志</div>
+      <div class="muted">日志已拆分到独立窗口中查看，可随时打开、复制、清空或保存。</div>
+      <div class="actions" style="margin-top: 12px;">
+        <button class="secondary" onclick="window.trayApi.openLogs()">打开日志窗口</button>
       </div>
-      <div class="log-hint">显示托盘与 agent-vibes 最近日志，重新打开窗口会自动刷新</div>
     </div>
   </div>
   <script>
     const { ipcRenderer } = require("electron")
     const existingModels = ${escapeInlineJson(models)}
-    const existingLogs = ${escapeInlineJson(logs)}
-
-    function escapeHtmlText(value) {
-      return String(value || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#39;")
-    }
-
-    function renderLogs(items) {
-      const container = document.getElementById("tray-logs")
-      if (!container) {
-        return
-      }
-
-      if (!Array.isArray(items) || items.length === 0) {
-        container.innerHTML = '<div class="empty">还没有日志</div>'
-        return
-      }
-
-      container.innerHTML = items.map((entry) => {
-        const level = ["info", "warn", "error"].includes(entry.level) ? entry.level : "info"
-        return '<div class="log-entry log-entry--' + level + '"><span class="log-entry__time">[' + escapeHtmlText(entry.time) + ']</span><span>' + escapeHtmlText(entry.message) + '</span></div>'
-      }).join("")
-
-      container.scrollTop = container.scrollHeight
-    }
 
     function setModelForm(model, index) {
       const value = model || {}
@@ -947,27 +933,158 @@ function getControlWindowHtml() {
       applyAccountAuth: () => ipcRenderer.invoke("tray:applyAccountAuth"),
       runDiagnostics: () => ipcRenderer.invoke("tray:runDiagnostics"),
       fixProxyBypassRules: () => ipcRenderer.invoke("tray:fixProxyBypassRules"),
+      openLogs: () => ipcRenderer.invoke("tray:openLogs"),
       saveModel: () => ipcRenderer.invoke("tray:saveModel", collectModelForm()),
       deleteModel: () => ipcRenderer.invoke("tray:deleteModel", document.getElementById("model-index").value),
       fillModel: (index) => setModelForm(existingModels[index], index),
       resetModelForm: () => setModelForm({}, ""),
-      copyLogs: () => ipcRenderer.invoke("tray:copyLogs"),
-      clearLogs: () => ipcRenderer.invoke("tray:clearLogs"),
-      saveLogs: () => ipcRenderer.invoke("tray:saveLogs"),
     }
 
     setModelForm({}, "")
-    renderLogs(existingLogs)
   </script>
 </body>
 </html>`
 }
 
 
+function getLogWindowHtml() {
+  const logs = getTrayLogsForView()
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Vibes 日志</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; margin: 0; padding: 16px; background: #0f172a; color: #e5e7eb; }
+    .wrap { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 32px); }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .title { font-size: 20px; font-weight: 600; }
+    .muted { color: #94a3b8; font-size: 12px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .log-panel { flex: 1; overflow: auto; box-sizing: border-box; border: 1px solid #334155; border-radius: 12px; padding: 12px; background: #020617; font-family: Consolas, monospace; font-size: 12px; line-height: 1.5; }
+    .log-entry { white-space: pre-wrap; word-break: break-word; color: #86efac; padding: 2px 0; }
+    .log-entry + .log-entry { border-top: 1px dashed rgba(71, 85, 105, 0.5); margin-top: 6px; padding-top: 6px; }
+    .log-entry--info { color: #86efac; }
+    .log-entry--warn { color: #fbbf24; }
+    .log-entry--error { color: #f87171; }
+    .log-entry__time { color: #93c5fd; margin-right: 8px; }
+    .empty { color: #94a3b8; font-size: 13px; padding: 10px 0; }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; background: #2563eb; color: #fff; font-size: 13px; cursor: pointer; transition: filter 0.15s ease, transform 0.15s ease; }
+    button:hover { filter: brightness(1.05); }
+    button:active { transform: translateY(1px); }
+    button.secondary { background: #334155; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <div class="title">运行日志</div>
+        <div class="muted">实时显示托盘与 agent-vibes 的最新日志</div>
+      </div>
+      <div class="actions">
+        <button class="secondary" onclick="window.logApi.copyLogs()">复制日志</button>
+        <button class="secondary" onclick="window.logApi.clearLogs()">清空日志</button>
+        <button class="secondary" onclick="window.logApi.saveLogs()">保存到文件</button>
+        <button onclick="window.logApi.refresh()">刷新</button>
+      </div>
+    </div>
+    <div id="tray-logs" class="log-panel"></div>
+  </div>
+  <script>
+    const { ipcRenderer } = require("electron")
+    const existingLogs = ${escapeInlineJson(logs)}
+
+    function escapeHtmlText(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+    }
+
+    function renderLogs(items) {
+      const container = document.getElementById("tray-logs")
+      if (!container) {
+        return
+      }
+
+      if (!Array.isArray(items) || items.length === 0) {
+        container.innerHTML = '<div class="empty">还没有日志</div>'
+        return
+      }
+
+      container.innerHTML = items.map((entry) => {
+        const level = ["info", "warn", "error"].includes(entry.level) ? entry.level : "info"
+        return '<div class="log-entry log-entry--' + level + '"><span class="log-entry__time">[' + escapeHtmlText(entry.time) + ']</span><span>' + escapeHtmlText(entry.message) + '</span></div>'
+      }).join("")
+
+      container.scrollTop = container.scrollHeight
+    }
+
+    window.logApi = {
+      copyLogs: () => ipcRenderer.invoke("tray:copyLogs"),
+      clearLogs: () => ipcRenderer.invoke("tray:clearLogs"),
+      saveLogs: () => ipcRenderer.invoke("tray:saveLogs"),
+      refresh: () => ipcRenderer.invoke("tray:openLogs"),
+    }
+
+    renderLogs(existingLogs)
+  </script>
+</body>
+</html>`
+}
+
 function refreshControlWindow() {
   if (controlWindow && !controlWindow.isDestroyed()) {
     controlWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(getControlWindowHtml())}`)
   }
+}
+
+function refreshLogWindow() {
+  if (logWindow && !logWindow.isDestroyed()) {
+    logWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(getLogWindowHtml())}`)
+  }
+}
+
+function openLogWindow() {
+  if (logWindow && !logWindow.isDestroyed()) {
+    logWindow.show()
+    logWindow.focus()
+    refreshLogWindow()
+    return
+  }
+
+  logWindow = new BrowserWindow({
+    width: 900,
+    height: 640,
+    minWidth: 640,
+    minHeight: 420,
+    resizable: true,
+    autoHideMenuBar: true,
+    title: "Agent Vibes 日志",
+    webPreferences: {
+      contextIsolation: false,
+      nodeIntegration: true,
+    },
+  })
+
+  logWindow.on("close", (event) => {
+    if (!isQuitting) {
+      event.preventDefault()
+      logWindow.hide()
+      return
+    }
+  })
+
+  logWindow.on("closed", () => {
+    logWindow = null
+  })
+
+  refreshLogWindow()
 }
 
 function openControlWindow() {
@@ -1030,6 +1147,10 @@ ipcMain.handle("tray:runDiagnostics", async () => {
 ipcMain.removeHandler("tray:fixProxyBypassRules")
 ipcMain.handle("tray:fixProxyBypassRules", async () => {
   await fixProxyBypassRules()
+})
+ipcMain.removeHandler("tray:openLogs")
+ipcMain.handle("tray:openLogs", async () => {
+  openLogWindow()
 })
 ipcMain.removeHandler("tray:saveModel")
 ipcMain.handle("tray:saveModel", async (_event, payload) => {
@@ -1195,87 +1316,19 @@ async function fixProxyBypassRules() {
   }
 
   try {
-    // Read current ProxyOverride value
-    const queryResult = await runCommand("reg", ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyOverride"])
+    const result = await runCommand(AGENT_VIBES_COMMAND, ["forward", "on"], {
+      windowsHide: true,
+    })
 
-    let currentValue = ""
-    if (queryResult.code === 0) {
-      const match = queryResult.stdout.match(/ProxyOverride\s+REG_SZ\s+(.+)/)
-      if (match) {
-        currentValue = match[1].trim()
-      }
-    }
-
-    // Define cursor domains to add
-    const cursorDomains = [
-      "*.cursor.sh",
-      "*.api5.cursor.sh",
-      "api2.cursor.sh",
-      "api2geo.cursor.sh",
-      "api2direct.cursor.sh",
-      "agent.api2.cursor.sh",
-      "agentn.api2.cursor.sh",
-      "agent.api2geo.cursor.sh",
-      "agentn.api2geo.cursor.sh",
-      "agent.api2direct.cursor.sh",
-      "agentn.api2direct.cursor.sh",
-      "agent.api5.cursor.sh",
-      "agentn.api5.cursor.sh",
-      "agent.api5geo.cursor.sh",
-      "agent.api5lat.cursor.sh",
-      "agentn.api5geo.cursor.sh",
-      "agentn.api5lat.cursor.sh",
-      "agent-gcpp-uswest.api5.cursor.sh",
-      "agent-gcpp-eucentral.api5.cursor.sh",
-      "agent-gcpp-apsoutheast.api5.cursor.sh",
-      "agentn-gcpp-uswest.api5.cursor.sh",
-      "agentn-gcpp-eucentral.api5.cursor.sh",
-      "agentn-gcpp-apsoutheast.api5.cursor.sh",
-      "agent.us.api5.cursor.sh",
-      "agent.eu.api5.cursor.sh",
-      "agent.ap.api5.cursor.sh",
-      "agentn.us.api5.cursor.sh",
-      "agentn.eu.api5.cursor.sh",
-      "agentn.ap.api5.cursor.sh",
-      "a.cursor.sh",
-    ]
-
-    // Parse existing values
-    const existingValues = currentValue ? currentValue.split(";").filter(Boolean) : []
-    const existingSet = new Set(existingValues.map(v => v.toLowerCase()))
-
-    // Add missing domains
-    let addedCount = 0
-    for (const domain of cursorDomains) {
-      if (!existingSet.has(domain.toLowerCase())) {
-        existingValues.push(domain)
-        addedCount++
-      }
-    }
-
-    if (addedCount === 0) {
-      dialog.showMessageBox({
-        type: "info",
-        title: "代理绕过规则",
-        message: "所有 Cursor 域名已在绕过列表中，无需修复。",
-      })
-      return
-    }
-
-    // Write new value using PowerShell (better encoding support)
-    const newValue = existingValues.join(";")
-    const psCommand = `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name 'ProxyOverride' -Value '${newValue.replace(/'/g, "''")}'`
-    const addResult = await runCommand("powershell", ["-NoProfile", "-Command", psCommand])
-
-    if (addResult.code !== 0) {
-      throw new Error(addResult.stderr || addResult.stdout || "注册表写入失败")
+    if (result.code !== 0) {
+      throw new Error(result.stderr || result.stdout || "agent-vibes forward on 执行失败")
     }
 
     dialog.showMessageBox({
       type: "info",
       title: "修复完成",
-      message: `已成功添加 ${addedCount} 个 Cursor 域名到代理绕过列表。`,
-      detail: "建议重启浏览器或系统以使更改生效。",
+      message: "已执行 agent-vibes forward on。",
+      detail: "建议随后运行一次网络诊断确认 forwarding 状态。",
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -1319,6 +1372,7 @@ function updateTrayMenu() {
     },
     { type: "separator" },
     { label: "网络诊断", click: () => { void runNetworkDiagnostics() } },
+    { label: "查看日志", click: openLogWindow },
     { label: "修复代理规则", click: () => { void fixProxyBypassRules() } },
     { type: "separator" },
     {

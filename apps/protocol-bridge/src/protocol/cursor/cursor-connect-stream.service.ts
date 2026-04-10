@@ -885,9 +885,9 @@ export class CursorConnectStreamService {
           return
         }
 
-        if (route.backend === "openai-compat") {
+        if (route.backend === "openai-compat" || route.backend === "codex") {
           this.logger.log(
-            `[DIRECT] Routing to OpenAI-compat backend for model: ${route.model}`
+            `[DIRECT] Routing to ${route.backend === "codex" ? "Codex" : "OpenAI-compat"} backend for model: ${route.model}`
           )
           for await (const event of this.openaiCompatService.sendDirectClaudeMessageStream(
             routedDto,
@@ -896,6 +896,8 @@ export class CursorConnectStreamService {
               apiKey: directEntry.customApiKey,
               baseUrl: directEntry.endpoint,
               model: directEntry.targetModelId,
+              preferResponsesApi: route.backend === "codex" || directEntry.useResponsesApi,
+              maxContextTokens: directEntry.maxContextTokens,
             }
           )) {
             yield* handleEvent(event)
