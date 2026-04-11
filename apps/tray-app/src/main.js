@@ -3,6 +3,29 @@ const path = require("path")
 const { spawn } = require("child_process")
 const os = require("os")
 const fs = require("fs")
+const forge = require("node-forge")
+
+function buildAuthorityKeyIdentifierExtension(keyIdentifierBytes) {
+  return {
+    id: "2.5.29.35",
+    critical: false,
+    value: forge.asn1.toDer(
+      forge.asn1.create(
+        forge.asn1.Class.UNIVERSAL,
+        forge.asn1.Type.SEQUENCE,
+        true,
+        [
+          forge.asn1.create(
+            forge.asn1.Class.CONTEXT_SPECIFIC,
+            0,
+            false,
+            keyIdentifierBytes
+          ),
+        ]
+      )
+    ).getBytes(),
+  }
+}
 
 const DEFAULT_AUTH_FIELDS = [
   { key: "cursorAuth/stripeMembershipType", value: "pro" },
@@ -628,24 +651,123 @@ function stopPortCheck() {
   }
 }
 
-async function ensureMkcertAvailable() {
-  const lookupCommand = process.platform === "win32" ? "where" : "which"
-  const result = await runCommand(lookupCommand, ["mkcert"])
-  return result.code === 0
+
+function generateLocalCertificates() {
+  const certDir = getCertDir()
+  fs.mkdirSync(certDir, { recursive: true })
+
+  const caKeys = forge.pki.rsa.generateKeyPair(2048)
+  const caCert = forge.pki.createCertificate()
+  caCert.publicKey = caKeys.publicKey
+  caCert.serialNumber = String(Date.now())
+  caCert.validity.notBefore = new Date()
+  caCert.validity.notAfter = new Date()
+  caCert.validity.notAfter.setFullYear(caCert.validity.notBefore.getFullYear() + 10)
+
+  const caAttrs = [
+    { name: "commonName", value: "Agent Vibes Local CA" },
+    { name: "organizationName", value: "Agent Vibes" },
+  ]
+  caCert.setSubject(caAttrs)
+  caCert.setIssuer(caAttrs)
+  caCert.setExtensions([
+    { name: "basicConstraints", cA: true },
+    { name: "keyUsage", keyCertSign: true, cRLSign: true },
+    { name: "subjectKeyIdentifier" },
+  ])
+  caCert.sign(caKeys.privateKey, forge.md.sha256.create())
+  const caSubjectKeyIdentifierExtension = caCert.getExtension("subjectKeyIdentifier")
+  const caSubjectKeyIdentifierHex = caSubjectKeyIdentifierExtension?.subjectKeyIdentifier
+
+  if (!caSubjectKeyIdentifierHex) {
+    throw new Error("Failed to derive CA subject key identifier")
+  }
+
+  const caSubjectKeyIdentifierBytes = forge.util.hexToBytes(caSubjectKeyIdentifierHex)
+
+  const serverKeys = forge.pki.rsa.generateKeyPair(2048)
+  const serverCert = forge.pki.createCertificate()
+  serverCert.publicKey = serverKeys.publicKey
+  serverCert.serialNumber = String(Date.now() + 1)
+  serverCert.validity.notBefore = new Date()
+  serverCert.validity.notAfter = new Date()
+  serverCert.validity.notAfter.setFullYear(serverCert.validity.notBefore.getFullYear() + 2)
+
+  const serverAttrs = [
+    { name: "commonName", value: "localhost" },
+    { name: "organizationName", value: "Agent Vibes" },
+  ]
+  const altNames = CURSOR_CERT_HOSTS.map((host) => {
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host === "::1") {
+      return { type: 7, ip: host }
+    }
+    return { type: 2, value: host }
+  })
+
+  serverCert.setSubject(serverAttrs)
+  serverCert.setIssuer(caAttrs)
+  serverCert.setExtensions([
+    { name: "basicConstraints", cA: false },
+    { name: "keyUsage", digitalSignature: true, keyEncipherment: true },
+    { name: "extKeyUsage", serverAuth: true },
+    { name: "subjectAltName", altNames },
+    buildAuthorityKeyIdentifierExtension(caSubjectKeyIdentifierBytes),
+    { name: "subjectKeyIdentifier" },
+  ])
+  serverCert.sign(caKeys.privateKey, forge.md.sha256.create())
+
+  const caCertPath = path.join(certDir, "ca.pem")
+  const caKeyPath = path.join(certDir, "ca-key.pem")
+
+  fs.writeFileSync(caCertPath, forge.pki.certificateToPem(caCert))
+  fs.writeFileSync(caKeyPath, forge.pki.privateKeyToPem(caKeys.privateKey))
+  fs.writeFileSync(getServerCertPath(), forge.pki.certificateToPem(serverCert))
+  fs.writeFileSync(getServerKeyPath(), forge.pki.privateKeyToPem(serverKeys.privateKey))
+
+  return { caCertPath }
 }
 
-async function resolveMkcertCaRootPem() {
-  const result = await runCommand("mkcert", ["-CAROOT"])
-  if (result.code !== 0) {
-    throw new Error(result.stderr || result.stdout || "无法获取 mkcert CA 目录")
+function installCaToSystemTrust(caCertPath) {
+  if (process.platform === "win32") {
+    return runCommand("powershell", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      `Import-Certificate -FilePath '${caCertPath.replace(/'/g, "''")}' -CertStoreLocation Cert:\\LocalMachine\\Root`,
+    ])
   }
 
-  const caRoot = result.stdout.trim()
-  if (!caRoot) {
-    throw new Error("mkcert CA 目录为空")
+  if (process.platform === "darwin") {
+    return runCommand("sudo", [
+      "security",
+      "add-trusted-cert",
+      "-d",
+      "-r",
+      "trustRoot",
+      "-k",
+      "/Library/Keychains/System.keychain",
+      caCertPath,
+    ])
   }
 
-  return path.join(caRoot, "rootCA.pem")
+  if (fs.existsSync("/usr/local/share/ca-certificates")) {
+    return runCommand("sudo", [
+      "sh",
+      "-c",
+      `cp '${caCertPath.replace(/'/g, "'\\''")}' /usr/local/share/ca-certificates/agent-vibes-ca.crt && update-ca-certificates`,
+    ])
+  }
+
+  if (fs.existsSync("/etc/pki/ca-trust/source/anchors")) {
+    return runCommand("sudo", [
+      "sh",
+      "-c",
+      `cp '${caCertPath.replace(/'/g, "'\\''")}' /etc/pki/ca-trust/source/anchors/agent-vibes-ca.pem && update-ca-trust extract`,
+    ])
+  }
+
+  return Promise.resolve({ code: 1, stdout: "", stderr: "未找到系统证书信任目录" })
 }
 
 function ensureNodeExtraCaCertsConfigured(caRootPem) {
@@ -688,41 +810,16 @@ async function setupCertificates() {
   updateTrayMenu()
 
   try {
-    const mkcertAvailable = await ensureMkcertAvailable()
-    if (!mkcertAvailable) {
-      dialog.showErrorBox(
-        "初始化认证失败",
-        "未检测到 mkcert，请先安装 mkcert 并确保它在 PATH 中。"
-      )
-      return
+    const { caCertPath } = generateLocalCertificates()
+
+    const trustResult = await installCaToSystemTrust(caCertPath)
+    if (trustResult.code !== 0) {
+      throw new Error(trustResult.stderr || trustResult.stdout || "系统证书信任安装失败")
     }
 
-    const certDir = getCertDir()
-    fs.mkdirSync(certDir, { recursive: true })
-
-    const installResult = await runCommand("mkcert", ["-install"])
-    if (installResult.code !== 0) {
-      throw new Error(installResult.stderr || installResult.stdout || "mkcert -install 失败")
-    }
-
-    const generateArgs = [
-      "-cert-file",
-      path.basename(getServerCertPath()),
-      "-key-file",
-      path.basename(getServerKeyPath()),
-      ...CURSOR_CERT_HOSTS,
-    ]
-    const generateResult = await runCommand("mkcert", generateArgs, { cwd: certDir })
-    if (generateResult.code !== 0) {
-      throw new Error(generateResult.stderr || generateResult.stdout || "证书生成失败")
-    }
-
-    const caRootPem = await resolveMkcertCaRootPem()
-    if (fs.existsSync(caRootPem)) {
-      const trustResult = await ensureNodeExtraCaCertsConfigured(caRootPem)
-      if (trustResult.code !== 0) {
-        throw new Error(trustResult.stderr || trustResult.stdout || "NODE_EXTRA_CA_CERTS 配置失败")
-      }
+    const envResult = await ensureNodeExtraCaCertsConfigured(caCertPath)
+    if (envResult.code !== 0) {
+      throw new Error(envResult.stderr || envResult.stdout || "NODE_EXTRA_CA_CERTS 配置失败")
     }
 
     dialog.showMessageBox({

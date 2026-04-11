@@ -1,4 +1,4 @@
-# Agent Vibes
+# Agent Vibes （管理员运行）
 
 [English](README.md) | 中文
 
@@ -88,10 +88,10 @@ npm link                          # 将 `agent-vibes` 注册为全局命令
 生成 SSL 证书：
 
 ```bash
-# 先安装 mkcert: https://github.com/FiloSottile/mkcert#installation
-mkcert -install
 agent-vibes cert
 ```
+
+`agent-vibes cert` 现在会直接使用内置的 Node.js 证书生成逻辑创建本地 CA 与服务证书，并自动完成系统信任安装；已经不再依赖 `mkcert -install`。
 
 上面这一步完成安装。下面开始选择你的上游来源。
 

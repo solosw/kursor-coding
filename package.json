@@ -90,6 +90,7 @@
   },
   "packageManager": "npm@11.6.4",
   "dependencies": {
+    "node-forge": "^1.4.0",
     "socks-proxy-agent": "^8.0.5"
   }
 }

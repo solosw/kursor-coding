@@ -32,6 +32,7 @@ import {
   IsOnNewPricingResponseSchema,
   NameTabRequestSchema,
   NameTabResponseSchema,
+  SubmitLogsRequestSchema,
   SubmitSpansResponseSchema,
   KnowledgeBaseAddRequestSchema,
   KnowledgeBaseAddResponseSchema,
@@ -247,6 +248,34 @@ export class AiserverMockController {
     this.logger.debug(
       `${label}: ${modelNames.length} model(s) -> ${modelNames.join(", ")}`
     )
+  }
+
+  private logSubmitLogsRequest(req?: FastifyRequest): void {
+    const body = req?.body
+    if (!(body instanceof Uint8Array || Buffer.isBuffer(body))) {
+      this.logger.debug("SubmitLogs request body missing or not binary")
+      return
+    }
+
+    try {
+      const request = fromBinary(SubmitLogsRequestSchema, new Uint8Array(body))
+      const samples = request.logs.slice(0, 3).map((log) => ({
+        key: log.key,
+        level: log.level,
+        message: log.message,
+        errorMessage: log.errorMessage,
+        metadata: log.metadata,
+        timestamp: log.timestamp.toString(),
+      }))
+
+      this.logger.debug(
+        `SubmitLogs received ${request.logs.length} log(s): ${JSON.stringify(samples)}`
+      )
+    } catch (error) {
+      this.logger.debug(
+        `SubmitLogs request parse failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   }
 
   private getPreferredDefaultModelName(
@@ -904,7 +933,8 @@ export class AiserverMockController {
   }
 
   @Post("aiserver.v1.AnalyticsService/SubmitLogs")
-  handleSubmitLogs(@Res() res: FastifyReply): void {
+  handleSubmitLogs(@Req() req: FastifyRequest, @Res() res: FastifyReply): void {
+    this.logSubmitLogsRequest(req)
     this.sendEmpty(res)
   }
 

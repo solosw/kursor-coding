@@ -2,130 +2,113 @@
 
 ## 概述
 
-直连模式允许你直接配置第三方 API（OpenAI、Anthropic 等），无需依赖 Google Cloud Code 或 Codex 后端。
+直连模式允许你直接配置第三方 API（OpenAI、Anthropic、兼容 OpenAI 的自定义接口等），无需依赖 Google Cloud Code 或 Codex 后端。
 
-## 快速开始
+当前版本的本地 HTTPS 证书已经改为由 `agent-vibes cert` 直接生成与安装，不再依赖 `mkcert -install`。
 
-### 第一步：安装 mkcert（首次使用）
+## 配置文件位置
 
-mkcert 用于生成本地 HTTPS 证书，让 Cursor 可以安全连接到本地服务。
+直连模式的模型配置文件位于：
+- Windows: `%USERPROFILE%\.agent-vibes\data\apis.yaml`
+- macOS/Linux: `~/.agent-vibes/data/apis.yaml`
 
-**Windows:**
-```powershell
-# 使用 winget 安装
-winget install mkcert
+你可以直接编辑这个文件来定义可用模型。
 
-# 或使用 Chocolatey
-choco install mkcert
+**配置示例：**
+```yaml
+  - name: gpt-5.4
+    format: codex
+    endpoint: http://xxxx/v1
+    custom_model_id: gpt-5.4
+    target_model_id: gpt-5.4
+    custom_api_key: "123"
+    use_responses_api: true
+    active: true
 
-# 或使用 Scoop
-scoop install mkcert
+  - name: auto
+    format: anthropic
+    endpoint: http://xxxxxxx/v1
+    custom_model_id: auto
+    target_model_id: auto
+    custom_api_key: "123"
+    active: true
+
+  - name: claude-opus-4-6
+    format: openai
+    endpoint: http://xxxxx/v1
+    custom_model_id: claude-opus-4-6
+    target_model_id: claude-opus-4-6
+    custom_api_key: "12345"
+    active: true
+
+  - name: MiniMax-M2.7
+    format: anthropic
+    endpoint: https://api.minimaxi.com/anthropic
+    custom_model_id: MiniMax-M2.7
+    target_model_id: MiniMax-M2.7
+    custom_api_key: "xxxxxxx"
+    max_context_tokens: 200000
+    active: true
 ```
 
-**macOS:**
+配置要点：
+1. `format` 用于指定协议类型，如 `anthropic` 或 `openai` 或 `codex`
+2. `endpoint` 填写上游 API 地址
+3. `custom_model_id` 是你在本地看到的模型名
+4. `target_model_id` 是实际上游模型名
+5. `custom_api_key` 填写对应服务的密钥
+6. `active: true` 表示启用该模型
+7  `max_context_tokens:2000000`上下文大小
+## 基础配置
+
+### 环境准备
+进入项目根目录
 ```bash
-brew install mkcert
+npm install
+npm run build
+npm link
 ```
 
-**Linux:**
+### 证书安装命令
+
 ```bash
-# Ubuntu/Debian
-sudo apt-get install -y mkcert
-
-# 或从源码安装
-curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64"
-chmod +x mkcert-v*-linux-amd64
-sudo cp mkcert-v*-linux-amd64 /usr/local/bin/mkcert
+agent-vibes cert
 ```
 
-### 第二步：启动托盘应用
+`agent-vibes cert` 会直接生成本地 CA 与服务证书，并自动安装系统信任；已经不再依赖 `mkcert -install`。
 
+### Cursor 基础设置
+
+1. 打开 Cursor 设置，确保使用Http2
+
+## 使用说明
+
+### 方式一：命令行启动
+
+适合习惯直接在终端中启动直连模式的场景。
+
+1. 先准备配置文件 `apis.yaml`
+2. 在项目根目录启动服务：
+```bash
+agent-vibes --mode direct
+```
+
+### 方式二：托盘启动
+
+适合希望通过图形界面管理模型、证书和服务状态的场景。
+
+1. 启动托盘应用：
 ```powershell
 cd apps/tray-app
 npm install
 npm run start
 ```
+2. 右键点击托盘图标
+3. 打开管理页面
+4. 在管理页面中安装证书
+5. 在管理页面中添加或修改模型配置
+6. 在托盘菜单中点击「启动服务」
 
-托盘图标将出现在系统托盘区。
-
-### 第三步：安装本地证书
-
-1. 右键点击托盘图标
-2. 选择「打开管理页面」
-3. 在管理页面中找到「证书安装」区域
-4. 点击「安装证书」按钮
-
-或手动执行：
-```bash
-# 在项目根目录执行
-npx agent-vibes cert
-```
-
-### 第四步：配置 API
-
-在管理页面中：
-1. 点击「添加模型」
-2. 选择协议格式：
-   - **Anthropic** - Claude 系列模型
-   - **OpenAI** - GPT 系列模型（自动识别 Responses API）
-3. 填写 API 端点、模型 ID 和 API Key
-4. 保存配置
-
-或手动编辑配置文件：
-
-**配置文件路径：**
-- Windows: `%USERPROFILE%\.agent-vibes\data\apis.yaml`
-- macOS/Linux: `~/.agent-vibes/data/apis.yaml`
-
-**配置示例：**
-```yaml
-apis:
-  # Claude 模型（Anthropic Messages API）
-  - name: Claude Sonnet 4.6
-    format: anthropic
-    endpoint: https://api.anthropic.com/v1/messages
-    custom_model_id: claude-sonnet-4-6
-    target_model_id: claude-sonnet-4-6-20251022
-    custom_api_key: sk-ant-xxxxx
-    active: true
-
-  # GPT-4o（OpenAI Chat Completions API）
-  - name: GPT-4o
-    format: openai
-    endpoint: https://api.openai.com/v1
-    custom_model_id: gpt-4o
-    target_model_id: gpt-4o
-    custom_api_key: sk-xxxxx
-    active: true
-
-  # o3-mini（自动使用 OpenAI Responses API）
-  - name: o3-mini
-    format: openai
-    endpoint: https://api.openai.com/v1
-    custom_model_id: o3-mini
-    target_model_id: o3-mini
-    custom_api_key: sk-xxxxx
-    active: true
-```
-
-### 第五步：启动服务
-
-在托盘菜单中：
-1. 右键点击托盘图标
-2. 选择「启动服务」
-
-或命令行启动：
-```bash
-# 在项目根目录
-npm run start:direct
-```
-
-### 第六步：配置 Cursor
-
-1. 打开 Cursor 设置
-2. 找到「AI 设置」或「模型设置」
-3. 将 API 端点改为：`https://localhost:2026`
-4. 保存设置
 
 ## 协议说明
 
@@ -134,42 +117,13 @@ npm run start:direct
 | 格式 | 协议 | 端点 | 适用模型 |
 |------|------|------|----------|
 | `anthropic` | Anthropic Messages API | `/v1/messages` | Claude 系列 |
-| `openai` | OpenAI Chat Completions | `/v1/chat/completions` | GPT-3.5/4 等 |
-| `openai` | OpenAI Responses API | `/v1/responses` | o1/o3/o4/gpt-5（自动） |
+| `openai` | OpenAI Chat Completions | `/v1/chat/completions` |
+| `codex` | OpenAI Responses API | `/v1/responses` | 
 
-### Responses API 自动触发
 
-当模型名以以下前缀开头时，自动使用 Responses API：
-- `o1*` - o1-preview, o1-mini 等
-- `o3*` - o3-mini 等
-- `o4*` - o4 系列
-- `gpt-5*` - GPT-5 系列
-- `codex*` - Codex 系列
 
-### 强制协议选择
 
-通过环境变量控制：
-```bash
-# 强制使用 Responses API
-set OPENAI_COMPAT_USE_RESPONSES_API=always
 
-# 强制使用 Chat Completions
-set OPENAI_COMPAT_USE_RESPONSES_API=never
-
-# 自动选择（默认）
-set OPENAI_COMPAT_USE_RESPONSES_API=auto
-```
-
-## 管理页面功能
-
-托盘应用提供 Web 管理界面：`https://localhost:2026/admin`
-
-功能包括：
-- 📊 服务状态监控
-- ➕ 添加/编辑模型配置
-- 🚀 启动/停止服务
-- 📜 查看日志
-- 🔧 证书管理
 
 ## 故障排除
 
@@ -191,8 +145,9 @@ kill -9 <PID>
 1. 确保证书已正确安装
 2. 尝试重新生成证书：
 ```bash
-npx agent-vibes cert --force
+npx agent-vibes cert
 ```
+3. 如需重新覆盖现有证书文件，可先删除 `~/.agent-vibes/certs`（Windows 为 `%USERPROFILE%\.agent-vibes\certs`）后再次执行
 
 ### 模型不显示
 
@@ -230,9 +185,6 @@ npm run start:direct
 # 安装证书
 npx agent-vibes cert
 
-# 强制重新生成证书
-npx agent-vibes cert --force
-
 # 查看帮助
 npx agent-vibes --help
 ```
@@ -243,5 +195,5 @@ npx agent-vibes --help
 - 初始版本
 - 支持 Anthropic Messages API
 - 支持 OpenAI Chat Completions API
-- 支持 OpenAI Responses API（自动）
+- 支持 OpenAI Responses API
 - 托盘应用管理界面

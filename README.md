@@ -1,4 +1,4 @@
-# Agent Vibes
+# Agent Vibes（please run by root）
 
 根据下面的二次开发
 原版详细 https://github.com/funny-vibes/agent-vibes
@@ -109,10 +109,10 @@ npm link                          # makes `agent-vibes` available globally
 Generate SSL certificates:
 
 ```bash
-# Install mkcert first: https://github.com/FiloSottile/mkcert#installation
-mkcert -install
 agent-vibes cert
 ```
+
+`agent-vibes cert` now uses the built-in Node.js certificate generation flow to create the local CA and server certificates, then installs trust automatically. It no longer depends on `mkcert -install`.
 
 ### Choose One Upstream Source
 

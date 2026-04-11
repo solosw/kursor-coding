@@ -21,21 +21,33 @@ import { ModelRouterService } from "./llm/model-router.service"
 import { registerContentTypeParsers } from "./shared/content-type-parsers"
 import { registerRequestHooks } from "./shared/request-hooks"
 
-// ── Auto-configure NODE_EXTRA_CA_CERTS for mkcert CA ──────────────────
-// Electron/Node.js does NOT read macOS System Keychain for TLS trust.
-// This ensures the mkcert root CA is trusted by all Node.js HTTPS clients.
+// ── Auto-configure NODE_EXTRA_CA_CERTS for Agent Vibes CA ──────────────────
+// Electron/Node.js does NOT read all system trust stores consistently.
 if (!process.env.NODE_EXTRA_CA_CERTS) {
-  try {
-    const caRoot = execSync("mkcert -CAROOT", {
-      encoding: "utf-8",
-      stdio: "pipe",
-    }).trim()
-    const caRootPem = path.join(caRoot, "rootCA.pem")
-    if (fs.existsSync(caRootPem)) {
-      process.env.NODE_EXTRA_CA_CERTS = caRootPem
+  const candidatePaths = [
+    path.join(
+      process.env.AGENT_VIBES_DATA_DIR || path.join(os.homedir(), ".agent-vibes"),
+      "certs",
+      "ca.pem"
+    ),
+    (() => {
+      try {
+        const caRoot = execSync("mkcert -CAROOT", {
+          encoding: "utf-8",
+          stdio: "pipe",
+        }).trim()
+        return path.join(caRoot, "rootCA.pem")
+      } catch {
+        return null
+      }
+    })(),
+  ].filter(Boolean)
+
+  for (const candidate of candidatePaths) {
+    if (candidate && fs.existsSync(candidate)) {
+      process.env.NODE_EXTRA_CA_CERTS = candidate
+      break
     }
-  } catch {
-    // mkcert not installed or not in PATH — ignore
   }
 }
 
