@@ -78,6 +78,12 @@ import {
 } from "./mcp-call-contract"
 import { SemanticSearchProviderService } from "./semantic-search-provider.service"
 import { KnowledgeBaseService } from "./knowledge-base.service"
+import {
+  extractEditFailureSelection,
+  findToolResultAppendPlan,
+  formatLineNumberedSnippet,
+  messageContainsToolResult,
+} from "./tool-protocol-helpers"
 
 /**
  * SSE Event content block structure (content_block_start)
@@ -1891,6 +1897,64 @@ export class CursorConnectStreamService {
     toolInput: Record<string, unknown>,
     toolResultContent: string
   ): void {
+    const appendPlan = findToolResultAppendPlan(
+      session.messages as Array<{
+        role: "user" | "assistant"
+        content: unknown
+      }>,
+      toolCallId
+    )
+    if (appendPlan?.mode === "merge_into_existing_user_message") {
+      const targetUserMessageIndex = appendPlan.userMessageIndex
+      if (targetUserMessageIndex != null) {
+        const targetUserMessage = session.messages[targetUserMessageIndex]
+        if (
+          targetUserMessage?.role === "user" &&
+          messageContainsToolResult(targetUserMessage.content, toolCallId)
+        ) {
+          return
+        }
+        if (
+          targetUserMessage?.role === "user" &&
+          !messageContainsToolResult(targetUserMessage.content, toolCallId)
+        ) {
+          const mergedMessages = session.messages.map((message, index) => {
+            if (index !== targetUserMessageIndex) {
+              return message
+            }
+            const blocks = Array.isArray(message.content)
+              ? message.content.map((block) => structuredClone(block))
+              : []
+            blocks.push({
+              type: "tool_result",
+              tool_use_id: toolCallId,
+              content: toolResultContent,
+            })
+            return {
+              ...message,
+              content: blocks as MessageContent,
+            }
+          })
+          this.sessionManager.replaceMessages(
+            session.conversationId,
+            mergedMessages
+          )
+          return
+        }
+      }
+    }
+
+    if (appendPlan?.mode === "append_new_user_message") {
+      this.sessionManager.addMessage(session.conversationId, "user", [
+        {
+          type: "tool_result" as const,
+          tool_use_id: toolCallId,
+          content: toolResultContent,
+        },
+      ])
+      return
+    }
+
     const lastMessage = session.messages[session.messages.length - 1]
     if (
       !lastMessage ||
@@ -1927,6 +1991,72 @@ export class CursorConnectStreamService {
         content: toolResultContent,
       },
     ])
+  }
+
+  private buildEditApplyFailureContext(
+    toolInput: Record<string, unknown>,
+    warning: string,
+    beforeContent: string
+  ): string | null {
+    if (!warning || !beforeContent) {
+      return null
+    }
+
+    const selection = extractEditFailureSelection(toolInput, warning)
+    const startLine = selection?.startLine
+    const endLine = selection?.endLine
+
+    const snippetWindow =
+      startLine != null || endLine != null
+        ? formatLineNumberedSnippet(beforeContent, {
+            startLine: startLine != null ? Math.max(1, startLine - 8) : 1,
+            endLine:
+              endLine != null
+                ? Math.max(
+                    startLine != null ? startLine : 1,
+                    endLine + 8
+                  )
+                : startLine != null
+                  ? startLine + 24
+                  : 48,
+            maxLines: 64,
+          })
+        : formatLineNumberedSnippet(beforeContent, {
+            maxLines: 64,
+          })
+
+    const detailLines = ["[edit_failure_context]"]
+    if (selection?.chunkIndex != null) {
+      detailLines.push(`replacement_chunk_index=${selection.chunkIndex}`)
+    }
+    if (selection?.startLine != null) {
+      detailLines.push(`requested_start_line=${selection.startLine}`)
+    }
+    if (selection?.endLine != null) {
+      detailLines.push(`requested_end_line=${selection.endLine}`)
+    }
+    if (selection?.allowMultiple != null) {
+      detailLines.push(`allow_multiple=${selection.allowMultiple}`)
+    }
+    if (selection?.replaceTextLength != null) {
+      detailLines.push(`replacement_text_length=${selection.replaceTextLength}`)
+    }
+    if (selection?.searchText) {
+      const compactSearchText =
+        selection.searchText.length > 240
+          ? `${selection.searchText.slice(0, 240)}...`
+          : selection.searchText
+      detailLines.push(`search_text=${JSON.stringify(compactSearchText)}`)
+    }
+    detailLines.push(
+      `snippet_range=${snippetWindow.startLine}-${snippetWindow.endLine}`
+    )
+    if (snippetWindow.truncated) {
+      detailLines.push("snippet_truncated=true")
+    }
+    detailLines.push(snippetWindow.snippet || "(empty file)")
+
+    return detailLines.join("\n")
   }
 
   private extractToolUseBlocks(
@@ -9966,9 +10096,17 @@ ${raw}
     const toolResultState = this.deriveToolResultState(toolResult)
     const parsedShellResult = this.extractShellResultPayload(toolResult)
     if (pendingToolCall.editApplyWarning) {
+      const editFailureContext = this.buildEditApplyFailureContext(
+        pendingToolCall.toolInput,
+        pendingToolCall.editApplyWarning,
+        pendingToolCall.beforeContent || ""
+      )
       toolResultContent =
         `${toolResultContent}\n\n` +
         `[edit_apply_warning] ${pendingToolCall.editApplyWarning}`
+      if (editFailureContext) {
+        toolResultContent = `${toolResultContent}\n${editFailureContext}`
+      }
     }
 
     // CRITICAL: For Agent mode, send real-time feedback before completion

@@ -221,6 +221,274 @@ const EXEC_RESULT_CASE_MAP: Record<string, string> = {
   executeHookResult: "execute_hook_result",
 }
 
+const CURSOR_LEGACY_VARIANT_SUFFIXES = [
+  "-high-thinking",
+  "-xhigh-fast",
+  "-high-fast",
+  "-low-fast",
+  "-thinking",
+  "-text",
+  "-fast",
+  "-xhigh",
+  "-high",
+  "-low",
+  "-medium",
+] as const
+
+function normalizeVariantToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+}
+
+function normalizeVariantBoolean(value: string): boolean | undefined {
+  switch (normalizeVariantToken(value)) {
+    case "1":
+    case "true":
+    case "enabled":
+    case "on":
+    case "yes":
+      return true
+    case "0":
+    case "false":
+    case "disabled":
+    case "off":
+    case "no":
+      return false
+    default:
+      return undefined
+  }
+}
+
+function normalizeVariantReasoningEffort(value: string): string | undefined {
+  switch (normalizeVariantToken(value)) {
+    case "auto":
+      return "auto"
+    case "none":
+    case "off":
+    case "disabled":
+      return "none"
+    case "minimal":
+    case "min":
+      return "minimal"
+    case "low":
+      return "low"
+    case "medium":
+    case "med":
+    case "normal":
+    case "standard":
+      return "medium"
+    case "high":
+      return "high"
+    case "xhigh":
+    case "extra_high":
+    case "extra":
+      return "xhigh"
+    case "max":
+      return "max"
+    default:
+      return undefined
+  }
+}
+
+function normalizeVariantFastMode(value: string): string | undefined {
+  const booleanValue = normalizeVariantBoolean(value)
+  if (booleanValue !== undefined) {
+    return booleanValue ? "true" : "false"
+  }
+
+  switch (normalizeVariantToken(value)) {
+    case "priority":
+    case "fast":
+      return "true"
+    case "standard":
+    case "default":
+      return "false"
+    default:
+      return undefined
+  }
+}
+
+function toCursorReasoningValue(value: string): string {
+  return value === "xhigh" ? "extra-high" : value
+}
+
+function parseCursorVariantString(modelId: string): {
+  baseModel: string
+  parameterValues?: Record<string, string>
+  maxMode?: boolean
+} | null {
+  const trimmed = (modelId || "").trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const parseBracket = (): {
+    baseModel: string
+    parameterValues?: Record<string, string>
+    maxMode?: boolean
+  } | null => {
+    let baseModel = ""
+    let rawSuffix = ""
+
+    const lastParenOpen = trimmed.lastIndexOf("(")
+    if (lastParenOpen > 0 && trimmed.endsWith(")")) {
+      baseModel = trimmed.slice(0, lastParenOpen).trim()
+      rawSuffix = trimmed.slice(lastParenOpen + 1, -1).trim()
+    } else {
+      const lastBracketOpen = trimmed.lastIndexOf("[")
+      if (lastBracketOpen <= 0 || !trimmed.endsWith("]")) {
+        return null
+      }
+      baseModel = trimmed.slice(0, lastBracketOpen).trim()
+      rawSuffix = trimmed.slice(lastBracketOpen + 1, -1).trim()
+    }
+
+    if (!baseModel || !rawSuffix) {
+      return null
+    }
+
+    const parts = rawSuffix
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0)
+
+    if (parts.length === 0) {
+      return null
+    }
+
+    const parameterValues: Record<string, string> = {}
+    let maxMode: boolean | undefined
+
+    for (const part of parts) {
+      const separatorIndex = part.indexOf("=")
+      if (separatorIndex <= 0) {
+        const effort = normalizeVariantReasoningEffort(part)
+        if (effort) {
+          parameterValues.reasoning = toCursorReasoningValue(effort)
+        }
+        continue
+      }
+
+      const key = normalizeVariantToken(part.slice(0, separatorIndex))
+      const rawValue = part.slice(separatorIndex + 1).trim()
+      if (!key || !rawValue) {
+        continue
+      }
+
+      if (
+        key === "reasoning" ||
+        key === "reasoning_effort" ||
+        key === "reasoning_level" ||
+        key === "effort" ||
+        key === "thinking_effort"
+      ) {
+        const effort = normalizeVariantReasoningEffort(rawValue)
+        if (effort) {
+          parameterValues.reasoning = toCursorReasoningValue(effort)
+        }
+        continue
+      }
+
+      if (
+        key === "fast" ||
+        key === "service_tier" ||
+        key === "tier" ||
+        key === "fast_mode"
+      ) {
+        const fastMode = normalizeVariantFastMode(rawValue)
+        if (fastMode) {
+          parameterValues.fast = fastMode
+        }
+        continue
+      }
+
+      if (key === "max" || key === "max_mode") {
+        const normalized = normalizeVariantBoolean(rawValue)
+        if (normalized !== undefined) {
+          maxMode = normalized
+        }
+      }
+    }
+
+    return {
+      baseModel,
+      parameterValues:
+        Object.keys(parameterValues).length > 0 ? parameterValues : undefined,
+      maxMode,
+    }
+  }
+
+  const bracketSelection = parseBracket()
+  if (bracketSelection) {
+    return bracketSelection
+  }
+
+  const normalizedModelId = trimmed.toLowerCase()
+  for (const suffix of CURSOR_LEGACY_VARIANT_SUFFIXES) {
+    if (!normalizedModelId.endsWith(suffix)) {
+      continue
+    }
+
+    const baseModel = trimmed.slice(0, trimmed.length - suffix.length).trim()
+    if (!baseModel) {
+      return null
+    }
+
+    const parameterValues: Record<string, string> = {}
+    switch (suffix) {
+      case "-medium":
+        parameterValues.reasoning = "medium"
+        break
+      case "-low":
+        parameterValues.reasoning = "low"
+        break
+      case "-high":
+      case "-high-thinking":
+        parameterValues.reasoning = "high"
+        break
+      case "-xhigh":
+        parameterValues.reasoning = "extra-high"
+        break
+      case "-thinking":
+        parameterValues.reasoning = "medium"
+        break
+      case "-xhigh-fast":
+        parameterValues.reasoning = "extra-high"
+        parameterValues.fast = "true"
+        break
+      case "-high-fast":
+        parameterValues.reasoning = "high"
+        parameterValues.fast = "true"
+        break
+      case "-low-fast":
+        parameterValues.reasoning = "low"
+        parameterValues.fast = "true"
+        break
+      case "-fast":
+        parameterValues.reasoning = "medium"
+        parameterValues.fast = "true"
+        break
+      case "-text":
+        parameterValues.reasoning = "none"
+        break
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(parameterValues, "fast")) {
+      parameterValues.fast = "false"
+    }
+
+    return {
+      baseModel,
+      parameterValues,
+      maxMode: false,
+    }
+  }
+
+  return null
+}
+
 /**
  * 创建空控制消息的辅助函数
  */
@@ -322,6 +590,25 @@ export class CursorRequestParser {
     return parsed
   }
 
+  private extractBaseModelId(modelId?: string): string | undefined {
+    const trimmed = (modelId || "").trim()
+    if (!trimmed) return undefined
+
+    const parenIndex = trimmed.lastIndexOf("(")
+    if (parenIndex > 0 && trimmed.endsWith(")")) {
+      const baseModel = trimmed.slice(0, parenIndex).trim()
+      return baseModel || trimmed
+    }
+
+    const bracketIndex = trimmed.lastIndexOf("[")
+    if (bracketIndex > 0 && trimmed.endsWith("]")) {
+      const baseModel = trimmed.slice(0, bracketIndex).trim()
+      return baseModel || trimmed
+    }
+
+    return trimmed
+  }
+
   private extractRequestedModelParameters(
     parameters: RequestedModel_ModelParameterValue[]
   ): Record<string, string> | undefined {
@@ -336,6 +623,82 @@ export class CursorRequestParser {
     }
 
     return Object.keys(result).length > 0 ? result : undefined
+  }
+
+  private mergeRequestedModelParameters(
+    ...parameterSets: Array<Record<string, string> | undefined>
+  ): Record<string, string> | undefined {
+    const merged: Record<string, string> = {}
+    for (const parameterSet of parameterSets) {
+      if (!parameterSet) continue
+      for (const [id, value] of Object.entries(parameterSet)) {
+        const normalizedId = this.normalizeModelParameterId(id)
+        if (!normalizedId) continue
+        merged[normalizedId] = value
+      }
+    }
+
+    return Object.keys(merged).length > 0 ? merged : undefined
+  }
+
+  private resolveRequestedThinkingLevel(
+    requestedModelParameters?: Record<string, string>
+  ): number | undefined {
+    if (!requestedModelParameters) {
+      return undefined
+    }
+
+    const reasoningAliases = [
+      "reasoning",
+      "reasoning_effort",
+      "thinking_effort",
+      "reasoning_level",
+      "effort",
+    ]
+
+    for (const id of reasoningAliases) {
+      const value = requestedModelParameters[id]
+      if (!value) continue
+      const normalized = value.trim().toLowerCase()
+      if (
+        normalized === "max" ||
+        normalized === "xhigh" ||
+        normalized === "extra-high" ||
+        normalized === "extra_high" ||
+        normalized === "high"
+      ) {
+        return 2
+      }
+      if (
+        normalized === "medium" ||
+        normalized === "minimal" ||
+        normalized === "low" ||
+        normalized === "auto"
+      ) {
+        return 1
+      }
+      if (
+        normalized === "none" ||
+        normalized === "off" ||
+        normalized === "disabled" ||
+        normalized === "false"
+      ) {
+        return 0
+      }
+    }
+
+    for (const [id, rawValue] of Object.entries(requestedModelParameters)) {
+      if (!id.includes("thinking") && !id.includes("reasoning")) continue
+      const normalized = rawValue.trim().toLowerCase()
+      if (["true", "enabled", "on", "1"].includes(normalized)) {
+        return 1
+      }
+      if (["false", "disabled", "off", "0"].includes(normalized)) {
+        return 0
+      }
+    }
+
+    return undefined
   }
 
   private extractNumericModelParameter(
@@ -829,8 +1192,25 @@ export class CursorRequestParser {
       requestContext = action.action.value.requestContext
     }
 
+    const requestedModelId = req.requestedModel?.modelId?.trim() || undefined
+    const requestedVariantSelection = requestedModelId
+      ? parseCursorVariantString(requestedModelId)
+      : null
+    const requestedBaseModel = this.extractBaseModelId(requestedModelId)
+    const modelDetailsModelId = req.modelDetails?.modelId?.trim() || undefined
+    const modelDetailsVariantSelection = modelDetailsModelId
+      ? parseCursorVariantString(modelDetailsModelId)
+      : null
+    const modelDetailsBaseModel = this.extractBaseModelId(modelDetailsModelId)
+
     // 提取 model
-    const model = req.modelDetails?.modelId || "claude-sonnet-4-20250514"
+    const model =
+      requestedVariantSelection?.baseModel ||
+      requestedBaseModel ||
+      modelDetailsVariantSelection?.baseModel ||
+      modelDetailsBaseModel ||
+      req.modelDetails?.modelId ||
+      "claude-sonnet-4-20250514"
 
     // 提取 conversationId
     const conversationId = req.conversationId || undefined
@@ -1024,8 +1404,16 @@ export class CursorRequestParser {
     const customSystemPrompt = req.customSystemPrompt || ""
 
     // 提取协议里的 token 参数（优先使用 Cursor 传值）
-    const requestedModelParameters = this.extractRequestedModelParameters(
+    const explicitRequestedModelParameters = this.extractRequestedModelParameters(
       req.requestedModel?.parameters || []
+    )
+    const variantRequestedModelParameters = this.mergeRequestedModelParameters(
+      modelDetailsVariantSelection?.parameterValues,
+      requestedVariantSelection?.parameterValues
+    )
+    const requestedModelParameters = this.mergeRequestedModelParameters(
+      variantRequestedModelParameters,
+      explicitRequestedModelParameters
     )
     const requestedMaxOutputTokens = this.extractRequestedMaxOutputTokens(
       req.requestedModel?.parameters || []
@@ -1188,30 +1576,39 @@ export class CursorRequestParser {
     }
 
     // 推导 thinkingLevel
-    // - modelDetails.maxMode 或 requestedModel.maxMode → 最大 thinking (level 2)
-    // - modelDetails.thinkingDetails 存在（presence）→ thinking 已启用 (level 1)
-    // - 模型名含 "thinking" → 标准 thinking (level 1)
-    // - model-registry 标记 isThinking → 降级 thinking (level 1)
-    //   确保模型本身支持 thinking 时即使 max 关闭也不完全禁用
+    // 优先遵循 Cursor 显式协议字段与 variant 参数；仅在未显式声明时，才回退到 registry 能力。
     const hasThinkingDetails = !!req.modelDetails?.thinkingDetails
     const modelMaxMode = req.modelDetails?.maxMode === true
     const requestedMaxMode = req.requestedModel?.maxMode === true
+    const requestedVariantMaxMode = requestedVariantSelection?.maxMode === true
+    const modelDetailsVariantMaxMode =
+      modelDetailsVariantSelection?.maxMode === true
+    const requestedThinkingLevel = this.resolveRequestedThinkingLevel(
+      requestedModelParameters
+    )
     const registryIsThinking = doesModelSupportThinking(model)
     let thinkingLevel = 0
-    if (modelMaxMode || requestedMaxMode) {
+    if (
+      modelMaxMode ||
+      requestedMaxMode ||
+      requestedVariantMaxMode ||
+      modelDetailsVariantMaxMode
+    ) {
       thinkingLevel = 2
     } else if (hasThinkingDetails) {
       thinkingLevel = 1
+    } else if (requestedThinkingLevel !== undefined) {
+      thinkingLevel = requestedThinkingLevel
     } else if (registryIsThinking) {
-      // 模型本身支持 thinking，但 Cursor 没有传 thinkingDetails
-      // （通常因为 max mode 被关闭）→ 降级到 level 1
       thinkingLevel = 1
     }
 
     if (thinkingLevel > 0) {
       this.logger.log(
         `Thinking enabled: level=${thinkingLevel} (thinkingDetails=${hasThinkingDetails}, ` +
-          `modelMaxMode=${modelMaxMode}, requestedMaxMode=${requestedMaxMode}, registryIsThinking=${registryIsThinking})`
+          `modelMaxMode=${modelMaxMode}, requestedMaxMode=${requestedMaxMode}, ` +
+          `requestedVariantMaxMode=${requestedVariantMaxMode}, modelDetailsVariantMaxMode=${modelDetailsVariantMaxMode}, ` +
+          `requestedThinkingLevel=${requestedThinkingLevel ?? 0}, registryIsThinking=${registryIsThinking})`
       )
     }
 
