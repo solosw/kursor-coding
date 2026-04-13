@@ -99,9 +99,27 @@ export class DirectApiConfigService implements OnModuleInit {
       return null
     }
 
+    const entries = this.getActiveEntries()
+
+    const exactMatch = entries.find(
+      (entry) => entry.customModelId.toLowerCase() === normalized
+    )
+    if (exactMatch) {
+      return exactMatch
+    }
+
+    const targetMatch = entries.find(
+      (entry) => entry.targetModelId.toLowerCase() === normalized
+    )
+    if (targetMatch) {
+      return targetMatch
+    }
+
     return (
-      this.getActiveEntries().find(
-        (entry) => entry.customModelId.toLowerCase() === normalized
+      entries.find(
+        (entry) =>
+          normalized.startsWith(entry.customModelId.toLowerCase()) ||
+          normalized.startsWith(entry.targetModelId.toLowerCase())
       ) || null
     )
   }
