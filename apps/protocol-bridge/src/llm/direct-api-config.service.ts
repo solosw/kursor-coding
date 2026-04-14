@@ -54,6 +54,8 @@ export class DirectApiConfigService implements OnModuleInit {
   private routingMode: RoutingMode = "standard"
   private configPath: string | null = null
   private entries: DirectApiConfigEntry[] = []
+  private lastMtimeMs = 0
+  private watchInterval: NodeJS.Timeout | null = null
 
   onModuleInit(): void {
     this.routingMode = this.resolveRoutingMode()
@@ -61,6 +63,50 @@ export class DirectApiConfigService implements OnModuleInit {
     this.logger.log(
       `Direct API config initialized: mode=${this.routingMode}, activeEntries=${this.getActiveEntries().length}${this.configPath ? `, path=${this.configPath}` : ""}`
     )
+    this.startWatching()
+  }
+
+  private startWatching(): void {
+    this.watchInterval = setInterval(() => {
+      let foundActivePath = false
+      for (const candidate of this.getConfigPathCandidates()) {
+        if (!fs.existsSync(candidate)) {
+          continue
+        }
+        
+        foundActivePath = true
+        try {
+          const stats = fs.statSync(candidate)
+          if (this.lastMtimeMs > 0 && stats.mtimeMs !== this.lastMtimeMs) {
+            this.logger.log(
+              `[Hot Reload] Detected change in ${candidate}, reloading...`
+            )
+            this.loadConfig()
+          } else if (this.lastMtimeMs === 0) {
+            // First time we see it after starting with no config
+            this.logger.log(
+              `[Hot Reload] Config file appeared at ${candidate}, loading...`
+            )
+            this.loadConfig()
+          }
+        } catch (error) {
+          // Ignore transient read errors
+        }
+        break // Only watch the highest-priority candidate
+      }
+
+      if (!foundActivePath && this.lastMtimeMs > 0) {
+        this.logger.log(`[Hot Reload] Config file removed, clearing entries...`)
+        this.lastMtimeMs = 0
+        this.entries = []
+        this.configPath = null
+      }
+    }, 2000)
+    
+    // Allow process to exit without waiting for this interval
+    if (this.watchInterval.unref) {
+      this.watchInterval.unref()
+    }
   }
 
   isDirectMode(): boolean {
@@ -156,12 +202,14 @@ export class DirectApiConfigService implements OnModuleInit {
       }
 
       try {
+        const stats = fs.statSync(candidate)
         const parsed = parseYaml(
           fs.readFileSync(candidate, "utf8")
         ) as DirectApisConfigFile
         const entries = this.normalizeEntries(parsed?.apis)
         this.entries = entries
         this.configPath = candidate
+        this.lastMtimeMs = stats.mtimeMs
         this.logger.log(
           `Loaded ${entries.length} direct API entr${entries.length === 1 ? "y" : "ies"} from ${candidate}`
         )
