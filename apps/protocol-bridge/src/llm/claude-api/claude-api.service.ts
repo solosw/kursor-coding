@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk"
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import * as crypto from "crypto"
@@ -769,10 +770,9 @@ export class ClaudeApiService implements OnModuleInit {
       baseUrl: options.baseUrl,
       source: "file",
     })
-    yield* this.executeStreamWithCooldownRetry(
+    yield* this.executeDirectStreamWithAnthropicSdk(
       dto,
       forwardHeaders,
-      new Set(),
       abortSignal,
       {
         account,
@@ -780,6 +780,145 @@ export class ClaudeApiService implements OnModuleInit {
         publicModelId: dto.model,
       }
     )
+  }
+
+  private async *executeDirectStreamWithAnthropicSdk(
+    dto: CreateMessageDto,
+    forwardHeaders: AnthropicForwardHeaders,
+    abortSignal: AbortSignal | undefined,
+    candidate: ClaudeApiCandidate
+  ): AsyncGenerator<string, void, unknown> {
+    const requestStartedAt = Date.now()
+    const request = this.buildRequestBody(dto, candidate)
+    const headers = this.buildHeadersForAccount(
+      candidate.account,
+      true,
+      forwardHeaders,
+      request.betas
+    )
+
+    this.logger.log(
+      `[Claude API/SDK] Stream request: model=${dto.model} -> ${candidate.upstreamModel}, baseUrl=${candidate.account.baseUrl}`
+    )
+
+    const client = new Anthropic({
+      apiKey: candidate.account.apiKey,
+      baseURL: candidate.account.baseUrl,
+      maxRetries: 1,
+      timeout: 180_000,
+      defaultHeaders: {
+        ...headers,
+        accept: undefined,
+        "content-type": undefined,
+        authorization: undefined,
+        "x-api-key": undefined,
+      },
+      fetch: async (url, init) => {
+        const dispatcher = this.buildProxyAgent(candidate.account)
+        return fetch(url, {
+          ...init,
+          ...(dispatcher ? { dispatcher } : {}),
+        } as RequestInit & { dispatcher?: unknown })
+      },
+    })
+
+    const streamUsage = {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      webSearchRequests: 0,
+    }
+    let emittedEvents = false
+
+    try {
+      const stream = await client.messages.create(
+        {
+          ...((request.body as unknown) as Anthropic.MessageCreateParamsStreaming),
+          stream: true,
+        },
+        {
+          signal: abortSignal,
+        }
+      )
+
+      for await (const event of stream as AsyncIterable<Anthropic.RawMessageStreamEvent>) {
+        emittedEvents = true
+        const chunk = this.formatAnthropicSdkStreamEvent(event)
+        this.mergeClaudeStreamUsage(streamUsage, chunk)
+        yield chunk
+      }
+
+      this.markAccountHealthy(candidate.account, candidate.upstreamModel)
+      this.recordClaudeApiUsage(
+        candidate,
+        "messages",
+        {
+          input_tokens: streamUsage.inputTokens,
+          cache_read_input_tokens: streamUsage.cachedInputTokens,
+          cache_creation_input_tokens: streamUsage.cacheCreationInputTokens,
+          output_tokens: streamUsage.outputTokens,
+          server_tool_use: {
+            web_search_requests: streamUsage.webSearchRequests,
+          },
+        },
+        requestStartedAt
+      )
+      return
+    } catch (error) {
+      const abortedError = toUpstreamRequestAbortedError(
+        error,
+        abortSignal,
+        "Claude API stream aborted"
+      )
+      if (abortedError) {
+        throw abortedError
+      }
+
+      const statusCode = this.getAnthropicSdkStatusCode(error)
+      const detail = formatUnknownError(error)
+      this.logger.error(
+        `[Claude API/SDK] Stream request failed: status=${statusCode ?? "unknown"}, detail=${detail}`
+      )
+
+      if (statusCode != null) {
+        if (emittedEvents) {
+          this.markAccountTemporaryFailure(
+            candidate.account,
+            statusCode,
+            candidate.upstreamModel
+          )
+        }
+        throw this.buildHttpFailureError(
+          candidate.account,
+          statusCode,
+          detail,
+          candidate.upstreamModel
+        )
+      }
+
+      throw this.buildTransientFailureError(
+        candidate.account,
+        504,
+        detail,
+        candidate.upstreamModel
+      )
+    }
+  }
+
+  private formatAnthropicSdkStreamEvent(
+    event: Anthropic.RawMessageStreamEvent
+  ): string {
+    return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
+  }
+
+  private getAnthropicSdkStatusCode(error: unknown): number | null {
+    if (!error || typeof error !== "object") {
+      return null
+    }
+
+    const status = (error as { status?: unknown }).status
+    return typeof status === "number" ? status : null
   }
 
   private async executeWithCooldownRetry(
