@@ -14,6 +14,8 @@ interface ModelFormData {
   customApiKey: string
   active: boolean
   maxContextTokens?: number
+  maxOutputTokens?: number
+  autoContinue?: boolean
   useResponsesApi?: boolean
 }
 
@@ -42,6 +44,8 @@ export class AdminController {
         customApiKey: e.customApiKey,
         active: e.active,
         maxContextTokens: e.maxContextTokens,
+        maxOutputTokens: e.maxOutputTokens,
+        autoContinue: e.autoContinue,
         useResponsesApi: e.useResponsesApi,
       })),
       configPath,
@@ -79,6 +83,12 @@ export class AdminController {
       lines.push("    custom_api_key: \"" + m.customApiKey + "\"")
       if (typeof m.maxContextTokens === "number" && Number.isFinite(m.maxContextTokens) && m.maxContextTokens > 0) {
         lines.push("    max_context_tokens: " + Math.floor(m.maxContextTokens))
+      }
+      if (typeof m.maxOutputTokens === "number" && Number.isFinite(m.maxOutputTokens) && m.maxOutputTokens > 0) {
+        lines.push("    max_output_tokens: " + Math.floor(m.maxOutputTokens))
+      }
+      if (m.autoContinue === true) {
+        lines.push("    auto_continue: true")
       }
       if (m.useResponsesApi === true) {
         lines.push("    use_responses_api: true")
@@ -338,6 +348,23 @@ export class AdminController {
             </div>
             <div class="col">
               <div class="form-group">
+                <label>最大输出长度</label>
+                <input type="number" value="\${m.maxOutputTokens || ''}" onchange="updateNumberModel(\${i}, 'maxOutputTokens', this.value)" placeholder="例如: 8192">
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <div class="form-group">
+                <label>自动续写</label>
+                <select onchange="updateModel(\${i}, 'autoContinue', this.value === 'true')">
+                  <option value="false" \${m.autoContinue ? '' : 'selected'}>关闭</option>
+                  <option value="true" \${m.autoContinue ? 'selected' : ''}>开启</option>
+                </select>
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-group">
                 <label>协议模式</label>
                 <select onchange="updateModel(\${i}, 'useResponsesApi', this.value === 'true')">
                   <option value="false" \${m.useResponsesApi ? '' : 'selected'}>默认</option>
@@ -372,6 +399,8 @@ export class AdminController {
         customApiKey: '',
         active: true,
         maxContextTokens: undefined,
+        maxOutputTokens: undefined,
+        autoContinue: false,
         useResponsesApi: false
       });
       renderModels();

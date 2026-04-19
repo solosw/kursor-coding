@@ -904,6 +904,8 @@ export class CursorConnectStreamService {
               model: directEntry.targetModelId,
               preferResponsesApi: route.backend === "codex" || directEntry.useResponsesApi,
               maxContextTokens: directEntry.maxContextTokens,
+              maxOutputTokens: directEntry.maxOutputTokens,
+              autoContinue: directEntry.autoContinue,
             }
           )) {
             yield* handleEvent(event)

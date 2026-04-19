@@ -60,6 +60,8 @@ export interface ClaudeDirectSendOptions {
   apiKey: string
   model: string
   accountLabel?: string
+  maxOutputTokens?: number
+  autoContinue?: boolean
 }
 
 function stringifyUnknownForLog(value: unknown): string {
@@ -733,16 +735,11 @@ export class ClaudeApiService implements OnModuleInit {
       baseUrl: options.baseUrl,
       source: "file",
     })
-    return this.executeWithCooldownRetry(
-      dto,
-      forwardHeaders,
-      new Set(),
-      {
-        account,
-        upstreamModel: options.model,
-        publicModelId: dto.model,
-      }
-    )
+    return this.executeDirectNonStreamWithAnthropicSdk(dto, forwardHeaders, {
+      account,
+      upstreamModel: options.model,
+      publicModelId: dto.model,
+    })
   }
 
   async *sendClaudeMessageStream(
@@ -780,6 +777,86 @@ export class ClaudeApiService implements OnModuleInit {
         publicModelId: dto.model,
       }
     )
+  }
+
+  private async executeDirectNonStreamWithAnthropicSdk(
+    dto: CreateMessageDto,
+    forwardHeaders: AnthropicForwardHeaders,
+    candidate: ClaudeApiCandidate
+  ): Promise<AnthropicResponse> {
+    const requestStartedAt = Date.now()
+    const request = this.buildRequestBody(dto, candidate)
+    const headers = this.buildHeadersForAccount(
+      candidate.account,
+      false,
+      forwardHeaders,
+      request.betas
+    )
+
+    this.logger.log(
+      `[Claude API/SDK] Non-stream request: model=${dto.model} -> ${candidate.upstreamModel}, baseUrl=${candidate.account.baseUrl}`
+    )
+
+    const client = new Anthropic({
+      apiKey: candidate.account.apiKey,
+      baseURL: candidate.account.baseUrl,
+      maxRetries: 1,
+      timeout: 300_000,
+      defaultHeaders: {
+        ...headers,
+        accept: undefined,
+        "content-type": undefined,
+        authorization: undefined,
+        "x-api-key": undefined,
+      },
+      fetch: async (url, init) => {
+        const dispatcher = this.buildProxyAgent(candidate.account)
+        return fetch(url, {
+          ...init,
+          ...(dispatcher ? { dispatcher } : {}),
+        } as RequestInit & { dispatcher?: unknown })
+      },
+    })
+
+    try {
+      const result = (await client.messages.create(
+        ((request.body as unknown) as Anthropic.MessageCreateParamsNonStreaming),
+        {
+          signal: AbortSignal.timeout(300_000),
+        }
+      )) as AnthropicResponse
+
+      this.markAccountHealthy(candidate.account, candidate.upstreamModel)
+      this.recordClaudeApiUsage(
+        candidate,
+        "messages",
+        result.usage as Record<string, unknown> | null | undefined,
+        requestStartedAt
+      )
+      return result
+    } catch (error) {
+      const statusCode = this.getAnthropicSdkStatusCode(error)
+      const detail = formatUnknownError(error)
+      this.logger.error(
+        `[Claude API/SDK] Non-stream request failed: status=${statusCode ?? "unknown"}, detail=${detail}`
+      )
+
+      if (statusCode != null) {
+        throw this.buildHttpFailureError(
+          candidate.account,
+          statusCode,
+          detail,
+          candidate.upstreamModel
+        )
+      }
+
+      throw this.buildTransientFailureError(
+        candidate.account,
+        504,
+        detail,
+        candidate.upstreamModel
+      )
+    }
   }
 
   private async *executeDirectStreamWithAnthropicSdk(

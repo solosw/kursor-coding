@@ -19,7 +19,7 @@ import {
   getPublicModelMetadata,
   resolveCloudCodeModel,
 } from "../../llm/model-registry"
-import { DirectApiConfigService } from "../../llm/direct-api-config.service"
+import { DirectApiConfigService, type DirectApiConfigEntry } from "../../llm/direct-api-config.service"
 import {
   ModelRouteResult,
   ModelRouterService,
@@ -49,6 +49,9 @@ export class MessagesService implements OnModuleInit {
     "ADDITIONAL_METADATA",
     "EPHEMERAL_MESSAGE",
   ] as const
+  private readonly AUTO_CONTINUE_PROMPT =
+    "继续上次回答，从中断处直接接着输出，不要重复前文，不要做总结，不要重写开头。"
+  private readonly MAX_AUTO_CONTINUE_ROUNDS = 8
   private readonly EMPTY_ATTACHMENT_SNAPSHOT: ContextAttachmentSnapshot = {
     readPaths: [],
     fileStates: [],
@@ -348,6 +351,203 @@ export class MessagesService implements OnModuleInit {
     }
   }
 
+  private shouldAutoContinueDirectEntry(
+    entry: DirectApiConfigEntry | null
+  ): boolean {
+    return entry?.autoContinue === true && !!entry.maxOutputTokens
+  }
+
+  private applyDirectOutputLimit(
+    dto: CreateMessageDto,
+    entry: DirectApiConfigEntry | null
+  ): CreateMessageDto {
+    if (!entry?.maxOutputTokens) {
+      return dto
+    }
+
+    const requested = this.normalizePositiveInteger(dto.max_tokens)
+    const resolvedMaxTokens = requested
+      ? Math.min(requested, entry.maxOutputTokens)
+      : entry.maxOutputTokens
+
+    return {
+      ...dto,
+      max_tokens: resolvedMaxTokens,
+    }
+  }
+
+  private buildAutoContinueDto(
+    dto: CreateMessageDto,
+    assistantContent: string
+  ): CreateMessageDto {
+    const assistantBlocks = assistantContent
+      ? [{ type: "text", text: assistantContent }]
+      : []
+
+    return {
+      ...dto,
+      messages: [
+        ...dto.messages,
+        {
+          role: "assistant",
+          content: assistantBlocks,
+        },
+        {
+          role: "user",
+          content: this.AUTO_CONTINUE_PROMPT,
+        },
+      ],
+    }
+  }
+
+  private parseSseChunk(
+    chunk: string
+  ): { event: string; data: Record<string, unknown> } | null {
+    try {
+      const lines = chunk.split("\n")
+      let event = ""
+      let data = ""
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          event = line.slice(7).trim()
+        } else if (line.startsWith("data: ")) {
+          data = line.slice(6).trim()
+        }
+      }
+
+      if (!event || !data) {
+        return null
+      }
+
+      return {
+        event,
+        data: JSON.parse(data) as Record<string, unknown>,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private async *executeDirectAutoContinueStream(
+    dto: CreateMessageDto,
+    directEntry: DirectApiConfigEntry,
+    route: ModelRouteResult,
+    forwardHeaders?: Record<string, string>
+  ): AsyncGenerator<string, void, unknown> {
+    let currentDto = this.applyDirectOutputLimit(dto, directEntry)
+    let round = 0
+
+    while (true) {
+      let stopReason: string | null = null
+      let assistantText = ""
+
+      const handleChunk = (chunk: string): string | null => {
+        const parsed = this.parseSseChunk(chunk)
+        if (!parsed) {
+          return chunk
+        }
+
+        if (parsed.event === "content_block_delta") {
+          const delta = parsed.data.delta
+          if (delta && typeof delta === "object") {
+            const text = (delta as { text?: unknown }).text
+            if (typeof text === "string") {
+              assistantText += text
+            }
+          }
+          return chunk
+        }
+
+        if (parsed.event === "message_delta") {
+          const delta = parsed.data.delta
+          if (delta && typeof delta === "object") {
+            const value = (delta as { stop_reason?: unknown }).stop_reason
+            stopReason = typeof value === "string" ? value : stopReason
+          }
+          if (stopReason === "max_tokens") {
+            return null
+          }
+        }
+
+        if (parsed.event === "message_stop" && stopReason === "max_tokens") {
+          return null
+        }
+
+        return chunk
+      }
+
+      if (route.backend === "claude-api") {
+        for await (const chunk of this.claudeApiService.sendDirectClaudeMessageStream(
+          currentDto,
+          {
+            accountLabel: directEntry.name,
+            apiKey: directEntry.customApiKey,
+            baseUrl: directEntry.endpoint,
+            model: directEntry.targetModelId,
+            maxOutputTokens: directEntry.maxOutputTokens,
+            autoContinue: directEntry.autoContinue,
+          },
+          forwardHeaders
+        )) {
+          const output = handleChunk(chunk)
+          if (output) {
+            yield output
+          }
+        }
+      } else {
+        for await (const chunk of this.openaiCompatService.sendDirectClaudeMessageStream(
+          currentDto,
+          {
+            accountLabel: directEntry.name,
+            apiKey: directEntry.customApiKey,
+            baseUrl: directEntry.endpoint,
+            model: directEntry.targetModelId,
+            preferResponsesApi:
+              route.backend === "codex" || directEntry.useResponsesApi,
+            maxContextTokens: directEntry.maxContextTokens,
+            maxOutputTokens: directEntry.maxOutputTokens,
+            autoContinue: directEntry.autoContinue,
+          }
+        )) {
+          const output = handleChunk(chunk)
+          if (output) {
+            yield output
+          }
+        }
+      }
+
+      if (stopReason !== "max_tokens") {
+        return
+      }
+
+      round += 1
+      if (round >= this.MAX_AUTO_CONTINUE_ROUNDS) {
+        this.logger.warn(
+          `[Direct AutoContinue] Reached continuation limit for model ${dto.model}`
+        )
+        yield `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "max_tokens", stop_sequence: null }, usage: { input_tokens: 0, output_tokens: 0 } })}\n\n`
+        yield `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`
+        return
+      }
+
+      if (!assistantText.trim()) {
+        this.logger.warn(
+          `[Direct AutoContinue] Stop reason is max_tokens but no assistant text was produced for model ${dto.model}`
+        )
+        yield `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "max_tokens", stop_sequence: null }, usage: { input_tokens: 0, output_tokens: 0 } })}\n\n`
+        yield `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`
+        return
+      }
+
+      this.logger.log(
+        `[Direct AutoContinue] Continuing model=${dto.model}, round=${round}`
+      )
+      currentDto = this.buildAutoContinueDto(currentDto, assistantText)
+      currentDto = this.applyDirectOutputLimit(currentDto, directEntry)
+    }
+  }
+
   private prepareDtoForRoute(
     dto: CreateMessageDto,
     route: ModelRouteResult
@@ -636,10 +836,15 @@ export class MessagesService implements OnModuleInit {
     }
 
     const route = this.modelRouter.resolveModel(dto.model)
-    const routedDto = this.prepareDtoForRoute(dto, route)
+    const directEntry = this.modelRouter.isDirectMode
+      ? this.directApiConfig.findEntryByCustomModel(dto.model)
+      : null
+    const routedDto = this.prepareDtoForRoute(
+      this.applyDirectOutputLimit(dto, directEntry),
+      route
+    )
 
     if (this.modelRouter.isDirectMode) {
-      const directEntry = this.directApiConfig.findEntryByCustomModel(dto.model)
       if (!directEntry) {
         throw new Error(
           `Direct mode: model ${dto.model} is not defined in apis.yaml.`
@@ -693,10 +898,15 @@ export class MessagesService implements OnModuleInit {
     }
 
     const route = this.modelRouter.resolveModel(dto.model)
-    const routedDto = this.prepareDtoForRoute(dto, route)
+    const directEntry = this.modelRouter.isDirectMode
+      ? this.directApiConfig.findEntryByCustomModel(dto.model)
+      : null
+    const routedDto = this.prepareDtoForRoute(
+      this.applyDirectOutputLimit(dto, directEntry),
+      route
+    )
 
     if (this.modelRouter.isDirectMode) {
-      const directEntry = this.directApiConfig.findEntryByCustomModel(dto.model)
       if (!directEntry) {
         throw new Error(
           `Direct mode: model ${dto.model} is not defined in apis.yaml.`
@@ -704,6 +914,16 @@ export class MessagesService implements OnModuleInit {
       }
 
       if (route.backend === "claude-api") {
+        if (this.shouldAutoContinueDirectEntry(directEntry)) {
+          yield* this.executeDirectAutoContinueStream(
+            routedDto,
+            directEntry,
+            route,
+            forwardHeaders
+          )
+          return
+        }
+
         yield* this.claudeApiService.sendDirectClaudeMessageStream(
           routedDto,
           {
@@ -711,6 +931,8 @@ export class MessagesService implements OnModuleInit {
             apiKey: directEntry.customApiKey,
             baseUrl: directEntry.endpoint,
             model: directEntry.targetModelId,
+            maxOutputTokens: directEntry.maxOutputTokens,
+            autoContinue: directEntry.autoContinue,
           },
           forwardHeaders
         )
@@ -718,6 +940,16 @@ export class MessagesService implements OnModuleInit {
       }
 
       if (route.backend === "openai-compat" || route.backend === "codex") {
+        if (this.shouldAutoContinueDirectEntry(directEntry)) {
+          yield* this.executeDirectAutoContinueStream(
+            routedDto,
+            directEntry,
+            route,
+            forwardHeaders
+          )
+          return
+        }
+
         yield* this.openaiCompatService.sendDirectClaudeMessageStream(
           routedDto,
           {
@@ -728,6 +960,8 @@ export class MessagesService implements OnModuleInit {
             preferResponsesApi:
               route.backend === "codex" || directEntry.useResponsesApi,
             maxContextTokens: directEntry.maxContextTokens,
+            maxOutputTokens: directEntry.maxOutputTokens,
+            autoContinue: directEntry.autoContinue,
           }
         )
         return

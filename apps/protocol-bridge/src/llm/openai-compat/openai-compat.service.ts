@@ -406,6 +406,8 @@ export interface OpenAiCompatDirectSendOptions {
   accountLabel?: string
   preferResponsesApi?: boolean
   maxContextTokens?: number
+  maxOutputTokens?: number
+  autoContinue?: boolean
 }
 
 type PersistedOpenaiCompatAccountState = PersistedBackendAccountState

@@ -25,6 +25,8 @@ interface DirectApiConfigEntryInput {
   custom_api_key?: unknown
   active?: unknown
   max_context_tokens?: unknown
+  max_output_tokens?: unknown
+  auto_continue?: unknown
   use_responses_api?: unknown
 }
 
@@ -37,6 +39,8 @@ export interface DirectApiConfigEntry {
   customApiKey: string
   active: boolean
   maxContextTokens?: number
+  maxOutputTokens?: number
+  autoContinue: boolean
   useResponsesApi: boolean
 }
 
@@ -264,6 +268,10 @@ export class DirectApiConfigService implements OnModuleInit {
       const maxContextTokens = this.normalizePositiveInteger(
         entry.max_context_tokens
       )
+      const maxOutputTokens = this.normalizePositiveInteger(
+        entry.max_output_tokens
+      )
+      const autoContinue = entry.auto_continue === true
       const useResponsesApi = entry.use_responses_api === true
 
       if (
@@ -285,6 +293,8 @@ export class DirectApiConfigService implements OnModuleInit {
         customApiKey,
         active,
         maxContextTokens,
+        maxOutputTokens,
+        autoContinue,
         useResponsesApi,
       })
     }

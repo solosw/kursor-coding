@@ -279,6 +279,8 @@ function parseApisConfig(content) {
         customApiKey: "",
         active: true,
         maxContextTokens: "",
+        maxOutputTokens: "",
+        autoContinue: false,
         useResponsesApi: false,
       }
       const rest = trimmed.slice(2)
@@ -311,6 +313,8 @@ function parseApisConfig(content) {
     if (key === "custom_api_key") current.customApiKey = value
     if (key === "active") current.active = value.toLowerCase() !== "false"
     if (key === "max_context_tokens") current.maxContextTokens = value
+    if (key === "max_output_tokens") current.maxOutputTokens = value
+    if (key === "auto_continue") current.autoContinue = value.toLowerCase() === "true"
     if (key === "use_responses_api") current.useResponsesApi = value.toLowerCase() === "true"
   }
 
@@ -355,6 +359,15 @@ function buildApisYaml(models) {
       lines.push("    max_context_tokens: " + Math.floor(parsedLimit))
     }
 
+    const parsedOutputLimit = Number.parseInt(String(model.maxOutputTokens || "").trim(), 10)
+    if (Number.isFinite(parsedOutputLimit) && parsedOutputLimit > 0) {
+      lines.push("    max_output_tokens: " + Math.floor(parsedOutputLimit))
+    }
+
+    if (model.autoContinue) {
+      lines.push("    auto_continue: true")
+    }
+
     if (model.useResponsesApi) {
       lines.push("    use_responses_api: true")
     }
@@ -387,6 +400,8 @@ function getDefaultModelForm() {
     customApiKey: "",
     active: true,
     maxContextTokens: "",
+    maxOutputTokens: "",
+    autoContinue: false,
     useResponsesApi: false,
   }
 }
@@ -968,12 +983,17 @@ function getControlWindowHtml() {
           <input id="model-max-context" placeholder="可选，例如 200000">
         </div>
         <div class="field">
+          <label>最大输出长度</label>
+          <input id="model-max-output" placeholder="可选，例如 8192">
+        </div>
+        <div class="field">
           <label>索引</label>
           <input id="model-index" placeholder="留空则新增">
         </div>
       </div>
       <div class="checkbox-row">
         <label><input type="checkbox" id="model-active" checked> 启用</label>
+        <label><input type="checkbox" id="model-auto-continue"> 自动续写</label>
         <label><input type="checkbox" id="model-responses"> Responses API</label>
       </div>
       <div class="actions" style="margin-top: 12px;">
@@ -1003,8 +1023,10 @@ function getControlWindowHtml() {
       document.getElementById("model-target-id").value = value.targetModelId || ""
       document.getElementById("model-api-key").value = value.customApiKey || ""
       document.getElementById("model-max-context").value = value.maxContextTokens || ""
+      document.getElementById("model-max-output").value = value.maxOutputTokens || ""
       document.getElementById("model-index").value = index ?? ""
       document.getElementById("model-active").checked = value.active !== false
+      document.getElementById("model-auto-continue").checked = value.autoContinue === true
       document.getElementById("model-responses").checked = value.useResponsesApi === true
     }
 
@@ -1018,7 +1040,9 @@ function getControlWindowHtml() {
         targetModelId: document.getElementById("model-target-id").value,
         customApiKey: document.getElementById("model-api-key").value,
         maxContextTokens: document.getElementById("model-max-context").value,
+        maxOutputTokens: document.getElementById("model-max-output").value,
         active: document.getElementById("model-active").checked,
+        autoContinue: document.getElementById("model-auto-continue").checked,
         useResponsesApi: document.getElementById("model-responses").checked,
       }
     }
@@ -1259,8 +1283,10 @@ ipcMain.handle("tray:saveModel", async (_event, payload) => {
   const targetModelId = normalizeModelFormValue(form.targetModelId)
   const customApiKey = normalizeModelFormValue(form.customApiKey)
   const maxContextTokens = normalizeModelFormValue(form.maxContextTokens)
+  const maxOutputTokens = normalizeModelFormValue(form.maxOutputTokens)
   const indexText = normalizeModelFormValue(form.index)
   const active = form.active !== false
+  const autoContinue = form.autoContinue === true
   const useResponsesApi = form.useResponsesApi === true
 
   if (!endpoint || !customModelId || !targetModelId || !customApiKey) {
@@ -1279,6 +1305,8 @@ ipcMain.handle("tray:saveModel", async (_event, payload) => {
     customApiKey,
     active,
     maxContextTokens,
+    maxOutputTokens,
+    autoContinue,
     useResponsesApi,
   }
 
