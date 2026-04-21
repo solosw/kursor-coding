@@ -445,7 +445,7 @@ export class CursorConnectStreamService {
   private readonly backendStreamAbortRegistry = new BackendStreamAbortRegistry()
   private lastHeartbeatLog = 0
   private readonly HEARTBEAT_LOG_INTERVAL = 60000 // Log heartbeat once per minute
-  private readonly KEEPALIVE_INTERVAL = 10000 // 每10秒发送心跳
+  private readonly KEEPALIVE_INTERVAL = 5000 // 每5秒发送心跳
   // 历史消息截断默认值（当 Cursor 未传预算参数时兜底）
   private readonly DEFAULT_HISTORY_MAX_TOKENS = 166_000
   // Cloud Code 输入 hard cap（从报错与流量观测验证）
@@ -8850,6 +8850,9 @@ ${raw}
     const dto = buildChatDtoForRoute(route)
     this.logger.debug(`Added ${apiTools.length} tool definition(s) to request`)
 
+    // Cover the DTO build and upstream stream bootstrap window.
+    yield this.grpcService.createHeartbeatResponse()
+
     // Call backend API (routed based on model name)
     try {
       const stream = this.getBackendStream(dto, {
@@ -8885,8 +8888,6 @@ ${raw}
       // Track thinking block state
       let isInThinkingBlock = false
       let thinkingStartTime = 0
-
-      yield this.grpcService.createHeartbeatResponse()
 
       for await (const item of this.streamWithHeartbeat(stream)) {
         if (

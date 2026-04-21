@@ -783,7 +783,7 @@ export class OpenaiCompatService implements OnModuleInit {
   private getStreamFirstChunkTimeoutMs(): number {
     return this.parsePositiveTimeoutMs(
       "OPENAI_COMPAT_STREAM_FIRST_CHUNK_TIMEOUT_MS",
-      15_000
+      30_000
     )
   }
 

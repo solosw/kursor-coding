@@ -249,6 +249,29 @@ export class ClaudeApiService implements OnModuleInit {
     return Math.floor(parsed)
   }
 
+  private parsePositiveTimeoutMs(key: string, fallbackMs: number): number {
+    const raw = this.configService.get<string | number | undefined>(key)
+    const parsed =
+      typeof raw === "string" ? Number.parseInt(raw.trim(), 10) : raw
+    return typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0
+      ? Math.floor(parsed)
+      : fallbackMs
+  }
+
+  private getDirectStreamFirstChunkTimeoutMs(): number {
+    return this.parsePositiveTimeoutMs(
+      "CLAUDE_DIRECT_STREAM_FIRST_CHUNK_TIMEOUT_MS",
+      30_000
+    )
+  }
+
+  private getDirectStreamIdleTimeoutMs(): number {
+    return this.parsePositiveTimeoutMs(
+      "CLAUDE_DIRECT_STREAM_IDLE_TIMEOUT_MS",
+      60_000
+    )
+  }
+
   constructor(
     private readonly configService: ConfigService,
     private readonly persistence: PersistenceService,
@@ -919,9 +942,27 @@ export class ClaudeApiService implements OnModuleInit {
         }
       )
 
-      for await (const event of stream as AsyncIterable<Anthropic.RawMessageStreamEvent>) {
+      const iterator = (
+        stream as AsyncIterable<Anthropic.RawMessageStreamEvent>
+      )[Symbol.asyncIterator]()
+      let nextTimeoutMs = this.getDirectStreamFirstChunkTimeoutMs()
+
+      while (true) {
+        const result = await this.readAsyncIteratorNextWithTimeout(
+          iterator,
+          nextTimeoutMs,
+          emittedEvents
+            ? `Claude API stream idle timeout after ${nextTimeoutMs}ms`
+            : `Claude API stream first chunk timeout after ${nextTimeoutMs}ms`,
+          abortSignal
+        )
+        if (result.done) {
+          break
+        }
+
         emittedEvents = true
-        const chunk = this.formatAnthropicSdkStreamEvent(event)
+        nextTimeoutMs = this.getDirectStreamIdleTimeoutMs()
+        const chunk = this.formatAnthropicSdkStreamEvent(result.value)
         this.mergeClaudeStreamUsage(streamUsage, chunk)
         yield chunk
       }
@@ -2940,6 +2981,44 @@ export class ClaudeApiService implements OnModuleInit {
     try {
       return await Promise.race([
         reader.read(),
+        ...(externalAbort.promise ? [externalAbort.promise] : []),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+        }),
+      ])
+    } catch (error) {
+      const abortedError = toUpstreamRequestAbortedError(
+        error,
+        abortSignal,
+        "Claude API stream aborted"
+      )
+      if (abortedError) {
+        throw abortedError
+      }
+      throw error
+    } finally {
+      externalAbort.cleanup()
+      if (timer) {
+        clearTimeout(timer)
+      }
+    }
+  }
+
+  private async readAsyncIteratorNextWithTimeout<T>(
+    iterator: AsyncIterator<T>,
+    timeoutMs: number,
+    timeoutMessage: string,
+    abortSignal?: AbortSignal
+  ): Promise<IteratorResult<T>> {
+    let timer: NodeJS.Timeout | undefined
+    const externalAbort = createAbortPromise(
+      abortSignal,
+      "Claude API stream aborted"
+    )
+
+    try {
+      return await Promise.race([
+        iterator.next(),
         ...(externalAbort.promise ? [externalAbort.promise] : []),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
