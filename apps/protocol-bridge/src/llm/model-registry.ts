@@ -699,7 +699,8 @@ export function resolveCloudCodeModel(alias: string): ModelEntry | null {
     normalized.startsWith("o1") ||
     normalized.startsWith("o3") ||
     normalized.startsWith("o4") ||
-    normalized.startsWith("codex")
+    normalized.startsWith("codex") ||
+    normalized.startsWith("think-")
   ) {
     return {
       cloudCodeId: normalized,
@@ -708,7 +709,8 @@ export function resolveCloudCodeModel(alias: string): ModelEntry | null {
       isThinking:
         normalized.startsWith("o3") ||
         normalized.startsWith("o4") ||
-        normalized.startsWith("codex"),
+        normalized.startsWith("codex") ||
+        normalized.startsWith("think-"),
       isClaudeThroughGoogle: false,
     }
   }
